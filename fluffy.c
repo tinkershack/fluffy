@@ -429,6 +429,7 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 		if ((is_not_root)		&&
 		    ((ie->mask & IN_MOVE_SELF)	||
 		    (ie->mask & IN_DELETE_SELF))) {
+			free(eventpathp);
 			return 0;
 		}
 
@@ -475,6 +476,11 @@ int
 dir_tree_add_watch(const char *pathname, const struct stat *sbuf, int type,
     struct FTW *ftwb)
 {
+	/* Process only if the entry is a directory */
+	if (!(type == FTW_DP || type == FTW_D)) {
+		return FTW_CONTINUE;
+	}
+
 	struct fluffy_context_info *ctxinfop = NULL;
 	ctxinfop = fluffy_get_context_info(fluffy_track.curr_ctxinfop->handle);
 	if (ctxinfop == NULL) {
@@ -483,56 +489,98 @@ dir_tree_add_watch(const char *pathname, const struct stat *sbuf, int type,
 
 	int reterr = 0;
 	int iwd = -1;
-	if (type == FTW_DP || type == FTW_D) {
-		int m = -1;
-		m = pthread_mutex_lock(&ctxinfop->mutex);
-		if (m != 0) {
-			return -1;
+	int m = -1;
+	m = pthread_mutex_lock(&ctxinfop->mutex);
+	if (m != 0) {
+		return -1;
+	}
+
+	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
+	    &ctxinfop->mutex);
+
+	if (ftwb->level != 0) {
+		if (g_hash_table_contains(ctxinfop->root_path_table,
+		    pathname)) {
+			/*
+			 * This had been a root watch path previously.
+			 * Since it is a regular descendent path now, remove
+			 * it from the root path list.
+			 */
+			if (!g_hash_table_remove(ctxinfop->root_path_table,
+			    (const char *)pathname)) {
+				PRINT_STDERR("Couldnot remove %s from the " \
+				    "root table\n", pathname);
+			}
+		} else {
+			/*
+			 * This path is not in the root path list, don't
+			 * have to remove anything now.
+			 */
+		}
+	}
+
+	do {
+		iwd = inotify_add_watch(ctxinfop->inotify_fd, pathname,
+				INOTIFY_EVENT_FLAGS);
+		if (iwd == -1) {
+			perror("inotify_add_watch");
+			reterr = -1;
+			break;
 		}
 
-		pthread_cleanup_push(fluffy_thread_cleanup_unlock,
-		    &ctxinfop->mutex);
-
-		do {
-			iwd = inotify_add_watch(ctxinfop->inotify_fd, pathname,
-					INOTIFY_EVENT_FLAGS);
-			if (iwd == -1) {
-				perror("inotify_add_watch");
-				reterr = -1;
-				break;
+		if(g_hash_table_contains(ctxinfop->wd_table,
+		    GINT_TO_POINTER(iwd))) {
+			/* Entry already exists */
+			struct fluffy_wd_info *oldwdinfop = NULL;
+			oldwdinfop = (struct fluffy_wd_info *)
+					g_hash_table_lookup(ctxinfop->wd_table,
+						GINT_TO_POINTER(iwd));
+			if (oldwdinfop->wd != iwd) {
+				oldwdinfop->wd = iwd;
 			}
 
-			struct fluffy_wd_info *wdinfop;
-			wdinfop = fluffy_wd_info_new();
-			if (wdinfop == NULL) {
-				reterr = -1;
-				break;
+			if (oldwdinfop->mask != INOTIFY_EVENT_FLAGS) {
+				oldwdinfop->mask = INOTIFY_EVENT_FLAGS;
 			}
 
-			wdinfop->wd = iwd;
-			wdinfop->mask = INOTIFY_EVENT_FLAGS;
-			wdinfop->path = strdup(pathname);
-			if (wdinfop->path == NULL) {
-				perror("strdup");
-				reterr = -1;
-				break;
+			if (oldwdinfop->path != pathname) {
+				oldwdinfop->path = strdup(pathname);
 			}
+			oldwdinfop = NULL;
 
-			if(!g_hash_table_contains(ctxinfop->wd_table,
-			    GINT_TO_POINTER(iwd))) {
-				(ctxinfop->nwd)++;
-			}
-			g_hash_table_replace(ctxinfop->wd_table,
-			    GINT_TO_POINTER(wdinfop->wd), wdinfop);
-			g_hash_table_replace(ctxinfop->path_table,
-			    strdup(wdinfop->path), wdinfop);
-			g_tree_replace(ctxinfop->path_tree,
-			    strdup(wdinfop->path),
-			    GINT_TO_POINTER(wdinfop->wd));
-		} while(0);
+			break;
+		}
 
-		pthread_cleanup_pop(1);		/* Unlock mutex */
-	} 
+		/* Table does not hold this entry already */
+		(ctxinfop->nwd)++;
+
+		/* Add the new entry */
+		struct fluffy_wd_info *wdinfop;
+		wdinfop = fluffy_wd_info_new();
+		if (wdinfop == NULL) {
+			reterr = -1;
+			break;
+		}
+
+		wdinfop->wd = iwd;
+		wdinfop->mask = INOTIFY_EVENT_FLAGS;
+		wdinfop->path = strdup(pathname);
+		if (wdinfop->path == NULL) {
+			perror("strdup");
+			reterr = -1;
+			break;
+		}
+
+		g_hash_table_replace(ctxinfop->wd_table,
+		    GINT_TO_POINTER(wdinfop->wd), wdinfop);
+		g_hash_table_replace(ctxinfop->path_table,
+		    strdup(wdinfop->path), wdinfop);
+		g_tree_replace(ctxinfop->path_tree,
+		    strdup(wdinfop->path),
+		    GINT_TO_POINTER(wdinfop->wd));
+	} while(0);
+
+	pthread_cleanup_pop(1);		/* Unlock mutex */
 
 	if (reterr) {
 		return reterr;
@@ -668,13 +716,21 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
 	    &ctxinfop->mutex);
+
 	if (is_root_path) {
+		/* Add only if the path is not in the watch list already */
 		if (!g_hash_table_contains(ctxinfop->path_table,
 		    addpath)) {
 			g_hash_table_replace(ctxinfop->root_path_table,
 			    strdup(addpath), NULL);
+		} else {
+			/*
+			 * This path is already a descendent of another root
+			 * path, so, don't add a new root path entry
+			 */
 		}
 	}
+
 	pthread_cleanup_pop(1);		/* Unlock mutex */
 
 	m = pthread_mutex_lock(&fluffy_track.mutex);
