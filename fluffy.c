@@ -134,10 +134,10 @@ struct fluffy_context_info {
 	GHashTable 	*root_path_table;
 
 	/* A user defined function that is called on every appropriate event */
-	int (*event_fn) (const struct fluffy_event_info *eventinfo,
+	int (*user_event_fn) (const struct fluffy_event_info *eventinfo,
 	    void *user_data);
 
-	void 		*user_data;	/* An user argument of event_fn() */
+	void 	*user_data;	/* User argument passed to user_event_fn() */
 
 	pthread_mutex_t mutex;		/* Mutex for this struct access */
 	pthread_t tid;			/* Thread id of the context thread */
@@ -258,9 +258,11 @@ fluffy_set_max_queued_events(const char *maxvalp)
 	}
 
 	/* Reinitialize all fluffy context to pick up the newly set value */
+	/*
 	if(fluffy_reinitiate_all_contexts()) {
 		return -1;
 	}
+	*/
 
 	return 0;
 }
@@ -406,7 +408,7 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 	if (ctxinfop == NULL) {
 		return -1;
 	}
-	if (ctxinfop->event_fn == NULL) {
+	if (ctxinfop->user_event_fn == NULL) {
 		return 0;
 	}
 
@@ -463,7 +465,7 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 	evtinfop->path = eventpathp;
 
 	int ret = 0;
-	ret = (ctxinfop->event_fn)(evtinfop, (void *)ctxinfop->user_data);
+	ret = (ctxinfop->user_event_fn)(evtinfop, (void *)ctxinfop->user_data);
 
 	free(eventpathp);
 	free(evtinfop);
@@ -1398,7 +1400,6 @@ fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 				PRINT_STDERR("Could not lookup wd %d\n", \
 						ievent->wd);
 				continue;
-				// exit(EXIT_FAILURE);
 			}
 
 			if(fluffy_handoff_event(fluffy_handle,
@@ -1763,7 +1764,7 @@ fluffy_start_context_thread(void *flhandle)
 
 
 int
-fluffy_init(int (*event_fn) (const struct fluffy_event_info *eventinfo,
+fluffy_init(int (*user_event_fn) (const struct fluffy_event_info *eventinfo,
     void *user_data), void *user_data)
 {
 	int m = -1;
@@ -1793,7 +1794,7 @@ fluffy_init(int (*event_fn) (const struct fluffy_event_info *eventinfo,
 	}
 
 	/* Assign the user provided function pointer */
-	ctxinfop->event_fn = event_fn;
+	ctxinfop->user_event_fn = user_event_fn;
 	ctxinfop->user_data = user_data;
 
 	m = pthread_mutex_unlock(&ctxinfop->mutex);
@@ -1849,12 +1850,13 @@ fluffy_wait_until_done(int fluffy_handle)
 		return -1;
 	}
 
+	/* Block until the context thread terminates */
 	m = pthread_join(ctxinfop->tid, &ret);
 	if (m != 0) {
 		return -1;
 	}
 
-	if (ret == PTHREAD_CANCELED) {
+	if (ret == PTHREAD_CANCELED) {		/* Deliberate cancell */
 		return 0;
 	} else if ((long)ret == 0) {
 		return 0;
@@ -1871,8 +1873,8 @@ fluffy_add_watch_path(int fluffy_handle, const char *pathtoadd)
 
 	reterr = fluffy_add_watch(fluffy_handle,
 			pathtoadd,
-			1,
-			1);
+			1,		/* Turn it to real path */
+			1);		/* It's a root path */
 	return reterr;
 }
 
