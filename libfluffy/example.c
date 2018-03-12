@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "fluffy.h"
+#include <fluffy.h>
 
 
 int
