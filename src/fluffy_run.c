@@ -41,7 +41,6 @@ process_fluffy_mqueue(struct epoll_event *evlist)
 	ssize_t nrbytes;
 	int reterr = 0;
 	struct mq_attr attr;
-	char *mqmsg = NULL;
 
 	if (evlist->data.fd != mqd) {
 		PRINT_STDERR("Incorrect file descriptor\n", "");
@@ -56,6 +55,7 @@ process_fluffy_mqueue(struct epoll_event *evlist)
 			perror("mq_getattr");
 			return reterr;
 		}
+		char *mqmsg = NULL;
 		mqmsg = calloc(1, attr.mq_msgsize);
 		if (mqmsg == NULL) {
 			reterr = errno;
@@ -67,16 +67,19 @@ process_fluffy_mqueue(struct epoll_event *evlist)
 		if (nrbytes == -1) {
 			reterr = errno;
 			perror("mq_receive");
+			free(mqmsg);
 			return reterr;
 		}
 
 		if (mqmsg[0] == id_mqfluffy_exit) {
+			free(mqmsg);
 			terminate_run();
 		}
 
 		if (mqmsg[0] == id_mqfluffy_watch) {
 			reterr = fluffy_add_watch_path(flh, mqmsg + 1);
 			if (reterr) {
+				free(mqmsg);
 				return reterr;
 			}
 		}
@@ -84,12 +87,33 @@ process_fluffy_mqueue(struct epoll_event *evlist)
 		if (mqmsg[0] == id_mqfluffy_ignore) {
 			reterr = fluffy_remove_watch_path(flh, mqmsg + 1);
 			if (reterr) {
+				free(mqmsg);
+				return reterr;
+			}
+		}
+
+		if (mqmsg[0] == id_mqfluffy_max_user_watches) {
+			reterr = fluffy_set_max_user_watches(mqmsg + 1);
+			if (reterr) {
+				free(mqmsg);
+				return reterr;
+			}
+		}
+
+		if (mqmsg[0] == id_mqfluffy_max_queued_events) {
+			reterr = fluffy_set_max_queued_events(mqmsg + 1);
+			if (reterr) {
+				free(mqmsg);
 				return reterr;
 			}
 		}
 
 		if (mqmsg[0] == id_mqfluffy_list_root_path) {
+			free(mqmsg);
+			return 0;
 		}
+
+		free(mqmsg);
 	}
 	return 0;
 }

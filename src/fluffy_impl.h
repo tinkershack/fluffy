@@ -20,5 +20,7 @@ extern const char id_mqfluffy_exit;
 extern const char id_mqfluffy_watch;
 extern const char id_mqfluffy_ignore;
 extern const char id_mqfluffy_list_root_path;
+extern const char id_mqfluffy_max_user_watches;
+extern const char id_mqfluffy_max_queued_events;
 
 #endif

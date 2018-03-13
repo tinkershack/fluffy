@@ -24,6 +24,8 @@ FILE *err_file = NULL;
 
 int mqsend_watch(char *watch_path);
 int mqsend_ignore(char *ignore_path);
+int mqsend_max_user_watches(char *max_watches);
+int mqsend_max_queued_events(char *max_events);
 int mqsend_list_root_path();
 
 int
@@ -49,13 +51,11 @@ mqsend_watch(char *watch_path)
 	sprintf(idstr, "%c", id_mqfluffy_watch);
 	mqmsg = strncpy(mqmsg, idstr, 2);
 	mqmsg = strncat(mqmsg, watch_path, strlen(watch_path) + 1);
-	if (mq_send(mqwatch, mqmsg, strlen(mqmsg) + 1, 0) == -1) {
+	if (mq_send(mqwatch, (const char *)mqmsg, strlen(mqmsg) + 1, 0) == -1) {
 		reterr = errno;
-		free(mqmsg);
 		perror("mq_send");
 		return reterr;
 	}
-	free(mqmsg);
 	if (mq_close(mqwatch)) {
 		perror("mq_close");
 	}
@@ -88,12 +88,80 @@ mqsend_ignore(char *ignore_path)
 	mqmsg = strncat(mqmsg, ignore_path, strlen(ignore_path) + 1);
 	if (mq_send(mqwatch, mqmsg, strlen(mqmsg) + 1, 0) == -1) {
 		reterr = errno;
-		free(mqmsg);
 		perror("mq_send");
 		return reterr;
 	}
-	free(mqmsg);
 	if (mq_close(mqwatch)) {
+		perror("mq_close");
+	}
+	return 0;
+}
+
+
+int
+mqsend_max_user_watches(char *max_watches)
+{
+	int reterr = 0;
+	mqd_t mqdmax = -1;
+	mqdmax = mq_open(mqfluffy, O_WRONLY);
+	if (mqdmax == (mqd_t)-1) {
+		reterr = errno;
+		perror("mq_open");
+		return reterr;
+	}
+
+	char *mqmsg = NULL;
+	mqmsg = calloc(1, strlen(max_watches) + 2);
+	if (mqmsg == NULL) {
+		reterr = errno;
+		perror("calloc");
+		return reterr;
+	}
+	char idstr[1];
+	sprintf(idstr, "%c", id_mqfluffy_max_user_watches);
+	mqmsg = strncpy(mqmsg, idstr, 2);
+	mqmsg = strncat(mqmsg, max_watches, strlen(max_watches) + 1);
+	if (mq_send(mqdmax, mqmsg, strlen(mqmsg) + 1, 0) == -1) {
+		reterr = errno;
+		perror("mq_send");
+		return reterr;
+	}
+	if (mq_close(mqdmax)) {
+		perror("mq_close");
+	}
+	return 0;
+}
+
+
+int
+mqsend_max_queued_events(char *max_events)
+{
+	int reterr = 0;
+	mqd_t mqdmax = -1;
+	mqdmax = mq_open(mqfluffy, O_WRONLY);
+	if (mqdmax == (mqd_t)-1) {
+		reterr = errno;
+		perror("mq_open");
+		return reterr;
+	}
+
+	char *mqmsg = NULL;
+	mqmsg = calloc(1, strlen(max_events) + 2);
+	if (mqmsg == NULL) {
+		reterr = errno;
+		perror("calloc");
+		return reterr;
+	}
+	char idstr[1];
+	sprintf(idstr, "%c", id_mqfluffy_max_queued_events);
+	mqmsg = strncpy(mqmsg, idstr, 2);
+	mqmsg = strncat(mqmsg, max_events, strlen(max_events) + 1);
+	if (mq_send(mqdmax, mqmsg, strlen(mqmsg) + 1, 0) == -1) {
+		reterr = errno;
+		perror("mq_send");
+		return reterr;
+	}
+	if (mq_close(mqdmax)) {
 		perror("mq_close");
 	}
 	return 0;
@@ -125,14 +193,12 @@ mqsend_list_root_path()
 	if (mq_send(mqlist, mqmsg, strlen(mqmsg) + 1, 0) == -1) {
 		reterr = errno;
 		perror("mq_send");
-		free(mqmsg);
 		return reterr;
 	}
 
 	if (mq_close(mqlist)) {
 		perror("mq_close");
 	}
-	free(mqmsg);
 	return 0;
 }
 
@@ -148,6 +214,8 @@ main(int argc, char *argv[])
 	gchar *print_err = NULL;
 	gchar **watch_paths = NULL;
 	gchar **ignore_paths = NULL;
+	gchar *max_user_watches = NULL;
+	gchar *max_queued_events = NULL;
 	gboolean list_root_path = FALSE;
 	gboolean get_watch_nos = FALSE;
 	GOptionEntry entries_g[]= {
@@ -165,10 +233,22 @@ main(int argc, char *argv[])
 			"Paths to ignore recursively. Repeat flag for " \
 				"multiple paths.",
 			"/knockturn/alley/borgin/brukes" },
+		{ "max-user-watches", 'W', 0, G_OPTION_ARG_STRING,
+			&max_user_watches,
+			"Upper limit on the number of watches per uid " \
+				"[fluffy defaults 524288]",
+			"524288" },
+		{ "max-queued-events", 'Q', 0, G_OPTION_ARG_STRING,
+			&max_queued_events,
+			"Upper limit on the number of events " \
+				"[fluffy defaults 524288]",
+			"524288" },
+		/*
 		{ "list-root-paths", 'l', 0, G_OPTION_ARG_NONE, &list_root_path,
 			"List root paths being watched", NULL },
 		{ "get-watch-nos", 'n', 0, G_OPTION_ARG_NONE, &get_watch_nos,
 			"Print the number of watches currently set", NULL },
+		*/
 		{ NULL }
 	};
 
@@ -220,6 +300,25 @@ main(int argc, char *argv[])
 	do {
 		int done = 0;
 		int rc = 0;
+
+		if (max_queued_events != NULL) {
+			if (mqsend_max_queued_events(max_queued_events)) {
+				rc = -1;
+			}
+			done = 1;
+			g_free(max_queued_events);
+			max_queued_events = NULL;
+		}
+
+		if (max_user_watches != NULL) {
+			if (mqsend_max_user_watches(max_user_watches)) {
+				rc = -1;
+			}
+			done = 1;
+			g_free(max_user_watches);
+			max_user_watches = NULL;
+		}
+
 		if (watch_paths != NULL) {
 			int j = 0;
 			do {
