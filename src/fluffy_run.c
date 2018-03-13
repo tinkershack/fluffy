@@ -190,6 +190,13 @@ initiate_run()
 		goto cleanup;
 	}
 
+	/* Detach the context, need wait to be joined later */
+	ret = fluffy_no_wait(flh);
+	if (ret) {
+		PRINT_STDERR("fluffy_no_wait fail\n", "");
+		goto cleanup;
+	}
+
 	ret = fluffy_set_max_user_watches("524288");
 	if (ret != 0) {
 		/* Best effort */
@@ -242,10 +249,6 @@ terminate_run()
 	}
 
 	if (fluffy_destroy(flh)) {
-		reterr = 1;
-	}
-
-	if (fluffy_wait_until_done(flh)) {
 		reterr = 1;
 	}
 

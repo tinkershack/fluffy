@@ -1867,6 +1867,27 @@ fluffy_wait_until_done(int fluffy_handle)
 
 
 int
+fluffy_no_wait(int fluffy_handle)
+{
+	int m = 0;
+
+	struct fluffy_context_info *ctxinfop;
+	ctxinfop = fluffy_get_context_info(fluffy_handle);
+	if (ctxinfop == NULL) {
+		return -1;
+	}
+
+	/* Deatch the context thread, can't be joined anymore  */
+	m = pthread_detach(ctxinfop->tid);
+	if (m != 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+
+int
 fluffy_add_watch_path(int fluffy_handle, const char *pathtoadd)
 {
 	int reterr = 0;

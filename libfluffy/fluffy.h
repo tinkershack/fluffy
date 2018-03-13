@@ -123,12 +123,34 @@ extern int fluffy_remove_watch_path(int fluffy_handle,
  * A call to fluffy_wait_until_done() blocks(waits) until the associated
  * context is destroyed or terminated.
  *
+ * NOTE: fluffy_wait_until_done() and fluffy_no_wait() are mutually exclusive.
+ *
  * args:
  * 	- int:	fluffy context handle
  * return:
  * 	- int:	0 on successful context exit, error value otherwise
  */
 extern int fluffy_wait_until_done(int fluffy_handle);
+
+/*
+ * Function:	fluffy_no_wait
+ *
+ * Each context returned by fluffy_init() runs as a separate thread. If the
+ * caller thread or main thread exits before the context thread terminates,
+ * the context thread becomes a zombie thread and continues to hog resources.
+ *
+ * A call to fluffy_no_wait() detaches the associated context thread, ensuring
+ * that the resources are freed when the thread dies/exits;
+ * fluffy_wait_until_done() can't be used on that context.
+ *
+ * NOTE: fluffy_wait_until_done() and fluffy_no_wait() are mutually exclusive.
+ *
+ * args:
+ * 	- int:	fluffy context handle
+ * return:
+ * 	- int:	0 on successful detach, error value otherwise
+ */
+extern int fluffy_no_wait(int fluffy_handle);
 
 /*
  * Function:	fluffy_destroy
