@@ -52,4 +52,7 @@ Mkfile.old
 dkms.conf
 
 tags
+
+# Binaries
 libfluffy/fluffy-example
+bin/

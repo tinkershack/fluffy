@@ -28,19 +28,18 @@ Fluffy?
    sense to have separate implementations for each of it to fully 
    utilize the exclusive features which aren't available across all
    platforms. If the features aren't very diverse, then it's only a 
-   matter of porting; though it may be painful it's less painful than an 
-   all-in-one model. Besides, a platform specific library helps keep the 
-   code base clean and lean. It's simpler. If you are thinking POSIX, 
-   you haven't yet realized why many of the popular operating systems 
-   aren't POSIX/SUS compliant.
+   matter of porting; though it may be painful it's relatively less 
+   painful than an all-in-one model. Besides, a platform specific 
+   library helps keep the code base clean and lean. It's simpler. If you 
+   are thinking POSIX, please think again why many of the popular 
+   operating systems aren't POSIX/SUS compliant.
 
  - Reports events faithfully.  
    The are (very)popular libraries/tools built that do an half arsed job 
    at reporting the events - wrong event path, erroneous event handling, 
    erroneous event reporting, oblivious to filesystem 
    structure/hierarchy changes(dir moves especially), can't add watches 
-   on the fly without re-executing(reinitiating) the program(library), 
-   foul coding practices, poor implementation.
+   on the fly without re-executing(reinitiating) the program(library).
    After considering various aspects of the process, building from 
    scratch seemed better than fixing the broken ones. 
 
@@ -79,15 +78,24 @@ There's still quite a few more to be done but these are the primary ones
 
  - Fluffy frontend _WIP_
  - Documentation _WIP_
- - proper error reporting
- - valgrind
- - other helper functions
- - test cases
- - replace glib hashtables with a native implementation?
+ - Proper error reporting
+ - Valgrind
+ - Test cases
+ - Doxygen?
+
+ - Fix makefiles, it's poorly formed.
+ - Other helper functions
+   - Destroy all contexts
+   - Get the total number of watches on a context
+   - Get the list of root watch paths
+ - Option to detach the context thread
+ - Option to terminate context thread when watch list becomes empty
+ - Ability to modify callback function pointer
+ - Replace glib hashtables with a native implementation?
 
 
-[fluffy.h]:     fluffy.h
-[example.c]:    example.c
+[fluffy.h]:     libfluffy/fluffy.h
+[example.c]:    libfluffy/example.c
 
 [Unlicensed]:   https://unlicense.org/
 [good dog]:     http://harrypotter.wikia.com/wiki/Fluffy

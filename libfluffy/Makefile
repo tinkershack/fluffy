@@ -1,5 +1,6 @@
 CC 	= gcc
-CFLAGS	= -g \
+CFLAGS	= \
+	  -g \
 	  -I./ \
 	  -Wall \
 	  -Wextra \

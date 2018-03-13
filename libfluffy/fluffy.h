@@ -250,10 +250,7 @@ extern int fluffy_set_max_user_watches(const char *max_size);
  * A helper function to print the event path and event action to the standard
  * output. This function must be passed as an argument to the fluffy_init()
  * call, not to be called separately. Fluffy calls the print function on every
- * event as long as the watch list is not empty. When there are no more
- * watches or FLUFFY_WATCH_EMPTY is encoutered, the respective context which
- * calls this funtion is destroyed and the return value is sent to
- * fluffy_wait_until_done().
+ * event as long as the watch list is not empty.
  *
  * args:
  * 	- const struct fluffy_event_info *:	This will be provided by fluffy.

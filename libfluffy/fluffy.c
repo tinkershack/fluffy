@@ -1949,12 +1949,14 @@ fluffy_print_event(const struct fluffy_event_info *eventinfo,
 	fprintf(stdout, "\n");
 	fprintf(stdout, "path:\t%s\n", eventinfo->path ? eventinfo->path : "");
 
+	/*
 	if (eventinfo->event_mask & FLUFFY_WATCH_EMPTY) {
 		int m = 0;
 		int fluffy_handle = *(int *)user_data;
 		m = fluffy_destroy(fluffy_handle);
 		return m;
 	}
+	*/
 
 	return 0;
 }
