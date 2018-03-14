@@ -18,6 +18,9 @@
 #define FLUFFY_ROOT_DELETE	IN_DELETE_SELF	/* Root file was deleted */
 #define FLUFFY_ROOT_MOVE	IN_MOVE_SELF	/* Root file was moved */
 
+/* All the above events */
+#define FLUFFY_ALL_EVENTS	IN_ALL_EVENTS
+
 /* Helper events */
 #define FLUFFY_CLOSE	(FLUFFY_CLOSE_WRITE | FLUFFY_CLOSE_NOWRITE) /* close */
 #define FLUFFY_MOVE	(FLUFFY_MOVED_FROM | FLUFFY_MOVED_TO) /* moves */

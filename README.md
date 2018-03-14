@@ -1,13 +1,13 @@
 In the spirit of true freedom, Fluffy is [Unlicensed][]. Free as in 
-'do what ever pleases you' sort of freedom and free beer as well! Fluffy 
+*do what ever pleases you* sort of freedom and free beer as well! Fluffy 
 believes that a piece of software is free(freedom?) only when it has 
 severed ties with licenses, copyrights, intellectual property rights 
 and other crap of similar kind. Attribution is a kind gesture, Fluffy 
 appreciates it but doesn't fret if you fail to say "[good dog][]!"
 
 
-Fluffy reports on-disk filesystem events faithfully and celebrates 
-craftsmanship.
+*Fluffy reports on-disk filesystem events faithfully and celebrates 
+craftsmanship.*
 
 # Fluffy - A 'free' watchdog for Linux on-disk filesystems [WIP]
 
@@ -35,7 +35,7 @@ Fluffy?
    operating systems aren't POSIX/SUS compliant.
 
  - Reports events faithfully.  
-   The are (very)popular libraries/tools built that do an half arsed job 
+   There are popular libraries/tools built already that do a poor job 
    at reporting the events - wrong event path, erroneous event handling, 
    erroneous event reporting, oblivious to filesystem 
    structure/hierarchy changes(dir moves especially), can't add watches 
@@ -45,13 +45,14 @@ Fluffy?
 
  - Add/remove watch paths on the fly.
 
- - A fully functional library that utilizes the native inotify subsystem 
-   properly. This means, unlike few tools, the events are not limited to 
-   just file 'modifications'. Every possible event action like 'open', 
-   'access', 'close', 'no write', 'delete', 'move' is caught. User has 
-   the flexibility(control?) to discard/process select events. 
+ - A fully functional library that utilizes the native inotify kernel 
+   subsystem properly. This means, unlike few tools, the events are not 
+   limited to just file 'modifications'. Every possible event action 
+   like 'open', 'access', 'close', 'no write', 'delete', 'move' is 
+   caught. User has the flexibility(control?) to discard/process select 
+   events. 
 
- - Freedom. NO GPL bullshit.  
+ - Freedom. NO GPL shit.  
    Fluffy has three heads. It likes to flip the middle one to licensing.
 
 
@@ -60,17 +61,165 @@ production. [fluffy.h][] has the interface description and callables.
 [example.c][] provides a sample.
 
 
-### Try it?
+### Don't mind getting your hands dirty?
 
-_This section will be updated soon_.
+```
+# Fork and clone this repo
+# Ensure glib-2.0 has been installed
+# cd to fluffy dir
+make            # `make clean` to cleanup
 
-If you like getting your hands dirty, then: fork/clone, read 
-[fluffy.h][] & [example.c][], run `make`, `./fluffy /watch/this 
-watch/this/too`, perform some action on the watch directory(`ls` 
-perhaps?). Dependency - glib-2.0
+# If you see errors, please consider creating an issue here.
+# No erros? Cool, let's proceed.
+make install    # `make uninstall` to uninstall
 
-The library interface is quite simple to use. Modify the example file 
-and run `make` again.
+# The framework, along with the library, has been installed.
+
+# Run help
+fluffyctl --help-all
+
+fluffy --help
+
+# Try
+# Execute fluffy first
+fluffy
+
+# Open a new terminal to execute fluffyctl
+# Let's watch /var/log & /tmp
+fluffyctl -w /var/log -w /tmp
+
+# You must see some action at the terminal where fluffy is run.
+# Nothing yet?
+ls -l /var/log  # Still nothing? We may have a problem!
+
+# Let's ignore /tmp, not interested watching anymore.
+fluffyctl -I /tmp
+
+# More? Let's quit fluffy so that you can start over & explore.
+fluffy exit
+
+# If you are interested only in the library, you can choose to compile 
+# just the library.
+cd ./libfluffy
+make
+
+# There will now be a libfluffy.a archive file(static library), you can
+# link against it in your projects.
+
+# example.c shows a simple usage of the library
+make example
+./fluffy-example
+
+# Modify example.c to play around. Run `make example` when you wish
+# to compile the modified example.c for testing.
+
+```
+
+#### fluffy usage
+```
+root@six-k:~# fluffy -h
+Usage:
+  fluffy [OPTION...] [exit]
+
+Help Options:
+  -h, --help                     Show help options
+
+Application Options:
+  -O, --outfile=./out.fluffy     File to print output [default:stdout]
+  -E, --errfile=./err.fluffy     File to print errors [default:stderr]
+
+```
+
+#### fluffyctl usage
+
+```
+root@six-k:~# fluffyctl --help-all
+Usage:
+  fluffyctl [OPTION...] ["/path/to/hogwarts/kitchen"]
+
+'fluffyctl' controls 'fluffy' program.
+fluffy must be invoked before adding/removing watches.  By default all 
+file system events are watched and reported. --help-events will show the 
+options to modify this behaviour
+
+Help Options:
+  -h, --help                                      Show help options
+  --help-all                                      Show all help options
+  --help-events                                   File system events to report
+
+When an option or more from 'events' group is passed, only those events 
+will be reported. When a new invocation of fluffyctl sets any 'events' 
+option, previously set events choice is discarded; overrides.
+
+  --all                                           Watch all possible events [default]
+  --access                                        Watch file access
+  --modify                                        Watch file modifications
+  --attrib                                        Watch metadata change
+  --close-write                                   Watch closing of file opened for writing
+  --close-nowrite                                 Watch closing of file/dir not opened for writing
+  --open                                          Watch opening of file/dir
+  --moved-from                                    Watch renames/moves: reports old file/dir name
+  --moved-to                                      Watch renames/moves: reports new file/dir name
+  --create                                        Watch creation of files/dirs
+  --delete                                        Watch deletion of files/dirs
+  --root-delete                                   Watch root path deletions
+  --root-move                                     Watch root path moves/renames
+  --isdir                                         Watch for events that occur against a directory
+  --unmount                                       Watch for unmount of the backing filesystem ['isdir' not raised]
+  --queue-overflow                                Watch for event queue overflows ['isdir' not raised]
+  --ignored                                       Watch for paths ignored by Fluffy(not watched) ['isdir' not raised]
+  --root-ignored                                  Watch for root paths ignored(not watched) ['isdir' not raised]
+  --watch-empty                                   Watch whether all Fluffy watches are removed ['isdir' not raised]
+
+Application Options:
+  -O, --outfile=./out.fluffy                      File to print output [default:stdout]
+  -E, --errfile=./err.fluffy                      File to print errors [default:stderr]
+  -w, --watch=/grimmauld/place/12                 Paths to watch recursively. Repeat flag for multiple paths.
+  -I, --ignore=/knockturn/alley/borgin/brukes     Paths to ignore recursively. Repeat flag for multiple paths.
+  -W, --max-user-watches=524288                   Upper limit on the number of watches per uid [fluffy defaults 524288]
+  -Q, --max-queued-events=524288                  Upper limit on the number of events [fluffy defaults 524288]
+
+```
+
+#### fluffy event log snippet
+
+```
+event:  CLOSE_NOWRITE, ISDIR, 
+path:   /tmp/.Test-unix
+
+event:  ACCESS, ISDIR, 
+path:   /tmp/systemd-private-6f74e3b317d0471b8546d2a83261b721-cups.service-3wkDKu
+
+event:  ACCESS, ISDIR, 
+path:   /tmp/systemd-private-6f74e3b317d0471b8546d2a83261b721-cups.service-3wkDKu/tmp
+
+event:  MODIFY, 
+path:   /var/log/messages
+
+event:  MODIFY, 
+path:   /var/log/syslog
+
+event:  OPEN, ISDIR, 
+path:   /var/log
+
+event:  ACCESS, ISDIR, 
+path:   /var/log
+
+event:  CLOSE_NOWRITE, ISDIR, 
+path:   /var/log
+
+event:  OPEN, ISDIR, 
+path:   /var/log
+
+event:  ACCESS, ISDIR, 
+path:   /var/log
+
+event:  CLOSE_NOWRITE, ISDIR, 
+path:   /var/log
+
+event:  CREATE, 
+path:   /tmp/sh-thd-1809946088
+```
 
 ### TODO: Fluffy is a WIP
 
@@ -88,7 +237,6 @@ There's still quite a few more to be done but these are the primary ones
    - Destroy all contexts
    - Get the total number of watches on a context
    - Get the list of root watch paths
- - Option to detach the context thread
  - Option to terminate context thread when watch list becomes empty
  - Ability to modify callback function pointer
  - Replace glib hashtables with a native implementation?

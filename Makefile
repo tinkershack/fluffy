@@ -20,7 +20,7 @@ SRC_PATH	= src/
 HDRS 		= $(SRC_PATH)fluffy_impl.h
 SRCS 		= $(SRC_PATH)fluffy_impl.c
 
-RUN_NAME	= fluffyrun
+RUN_NAME	= fluffy
 PROG_RUN	= bin/$(RUN_NAME)
 SRCS_RUN 	= $(SRC_PATH)fluffy_run.c
 

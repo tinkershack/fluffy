@@ -27,13 +27,113 @@ FILE *err_file = NULL;	/* File stream for PRINT_STDERR macro */
 int epollfd = -1;
 mqd_t mqd = -1;		/* Message queue descriptor */
 int flh = -1;		/* Fluffy handle */
+uint32_t print_events_mask = FLUFFY_PRINT_ALL;
 
 /* Forward function declarations */
-int process_fluffy_mqueue(struct epoll_event *evlist);
 int mqsend_exit();
 void terminate_run();
+int process_fluffy_mqueue(struct epoll_event *evlist);
+int print_events(const struct fluffy_event_info *eventinfo, void *user_data);
+int set_print_events_mask(char *mask);
 
 /* Function definitions */
+
+int
+set_print_events_mask(char *mask)
+{
+	if (mask == NULL) {
+		return -1;
+	}
+
+	unsigned long val = 0;
+	val = strtoul(mask, NULL, 0);
+	if (val == ULONG_MAX) {		/* value overflow */
+		return -1;
+	}
+
+	print_events_mask = (uint32_t)val;
+	return 0;
+}
+
+int
+print_events(const struct fluffy_event_info *eventinfo,
+    void *user_data)
+{
+	if (!(eventinfo->event_mask & print_events_mask)) {
+		return 0;
+	}
+
+	fprintf(stdout, "\n");
+	fprintf(stdout, "event:\t");
+	if (eventinfo->event_mask & FLUFFY_ACCESS &&
+	    print_events_mask & FLUFFY_ACCESS)
+		fprintf(stdout, "ACCESS, ");
+	if (eventinfo->event_mask & FLUFFY_ATTRIB &&
+	    print_events_mask & FLUFFY_ATTRIB)
+		fprintf(stdout, "ATTRIB, ");
+	if (eventinfo->event_mask & FLUFFY_CLOSE_NOWRITE &&
+	    print_events_mask & FLUFFY_CLOSE_NOWRITE)
+		fprintf(stdout, "CLOSE_NOWRITE, ");
+	if (eventinfo->event_mask & FLUFFY_CLOSE_WRITE &&
+	    print_events_mask & FLUFFY_CLOSE_WRITE)
+		fprintf(stdout, "CLOSE_WRITE, ");
+	if (eventinfo->event_mask & FLUFFY_CREATE &&
+	    print_events_mask & FLUFFY_CREATE)
+		fprintf(stdout, "CREATE, ");
+	if (eventinfo->event_mask & FLUFFY_DELETE &&
+	    print_events_mask & FLUFFY_DELETE)
+		fprintf(stdout, "DELETE, ");
+	if (eventinfo->event_mask & FLUFFY_ROOT_DELETE &&
+	    print_events_mask & FLUFFY_ROOT_DELETE)
+		fprintf(stdout, "ROOT_DELETE, ");
+	if (eventinfo->event_mask & FLUFFY_MODIFY &&
+	    print_events_mask & FLUFFY_MODIFY)
+		fprintf(stdout, "MODIFY, ");
+	if (eventinfo->event_mask & FLUFFY_ROOT_MOVE &&
+	    print_events_mask & FLUFFY_ROOT_MOVE)
+		fprintf(stdout, "ROOT_MOVE, ");
+	if (eventinfo->event_mask & FLUFFY_MOVED_FROM &&
+	    print_events_mask & FLUFFY_MOVED_FROM)
+		fprintf(stdout, "MOVED_FROM, ");
+	if (eventinfo->event_mask & FLUFFY_MOVED_TO &&
+	    print_events_mask & FLUFFY_MOVED_TO)
+		fprintf(stdout, "MOVED_TO, ");
+	if (eventinfo->event_mask & FLUFFY_OPEN &&
+	    print_events_mask & FLUFFY_OPEN)
+		fprintf(stdout, "OPEN, ");
+
+	if (eventinfo->event_mask & FLUFFY_IGNORED &&
+	    print_events_mask & FLUFFY_IGNORED)
+		fprintf(stdout, "IGNORED, ");
+	if (eventinfo->event_mask & FLUFFY_ISDIR &&
+	    print_events_mask & FLUFFY_ISDIR)
+		fprintf(stdout, "ISDIR, ");
+	if (eventinfo->event_mask & FLUFFY_UNMOUNT &&
+	    print_events_mask & FLUFFY_UNMOUNT)
+		fprintf(stdout, "UNMOUNT, ");
+	if (eventinfo->event_mask & FLUFFY_ROOT_IGNORED &&
+	    print_events_mask & FLUFFY_ROOT_IGNORED)
+		fprintf(stdout, "ROOT_IGNORED, ");
+	if (eventinfo->event_mask & FLUFFY_WATCH_EMPTY &&
+	    print_events_mask & FLUFFY_WATCH_EMPTY)
+		fprintf(stdout, "WATCH_EMPTY, ");
+	if (eventinfo->event_mask & FLUFFY_Q_OVERFLOW &&
+	    print_events_mask & FLUFFY_Q_OVERFLOW)
+		fprintf(stdout, "Q_OVERFLOW, ");
+	fprintf(stdout, "\n");
+	fprintf(stdout, "path:\t%s\n", eventinfo->path ? eventinfo->path : "");
+
+	/*
+	if (eventinfo->event_mask & FLUFFY_WATCH_EMPTY) {
+		int m = 0;
+		int fluffy_handle = *(int *)user_data;
+		m = fluffy_destroy(fluffy_handle);
+		return m;
+	}
+	*/
+
+	return 0;
+}
 
 int
 process_fluffy_mqueue(struct epoll_event *evlist)
@@ -102,6 +202,14 @@ process_fluffy_mqueue(struct epoll_event *evlist)
 
 		if (mqmsg[0] == id_mqfluffy_max_queued_events) {
 			reterr = fluffy_set_max_queued_events(mqmsg + 1);
+			if (reterr) {
+				free(mqmsg);
+				return reterr;
+			}
+		}
+
+		if (mqmsg[0] == id_mqfluffy_events_mask) {
+			reterr = set_print_events_mask(mqmsg + 1);
 			if (reterr) {
 				free(mqmsg);
 				return reterr;
@@ -184,7 +292,7 @@ initiate_run()
 		goto cleanup;
 	}
 
-	flh = fluffy_init(fluffy_print_event, (void *)&flh);
+	flh = fluffy_init(print_events, NULL);
 	if (flh < 1) {
 		PRINT_STDERR("fluffy_init fail\n", "");
 		goto cleanup;
