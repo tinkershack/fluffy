@@ -216,6 +216,14 @@ process_fluffy_mqueue(struct epoll_event *evlist)
 			}
 		}
 
+		if (mqmsg[0] == id_mqfluffy_reinitiate) {
+			reterr = reinitiate_run();
+			if (reterr) {
+				free(mqmsg);
+				return reterr;
+			}
+		}
+
 		if (mqmsg[0] == id_mqfluffy_list_root_path) {
 			free(mqmsg);
 			return 0;
@@ -367,6 +375,15 @@ terminate_run()
 	}
 }
 
+int
+reinitiate_run()
+{
+	if (fluffy_reinitiate_context(flh)) {
+		return -1;
+	}
+
+	return 0;
+}
 
 int
 main(int argc, char *argv[])

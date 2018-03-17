@@ -11,7 +11,7 @@ craftsmanship.*
 
 # Fluffy - A 'free' watchdog for Linux on-disk filesystems [WIP]
 
-__Fluffy__ is a convenient front-end tool, __libfluffy__ is what you 
+__Fluffy__ is a convenient CLI tool, __libfluffy__ is what you 
 will find under the hood. libfluffy uses the inotify kernel subsystem.
 
 There are challenges in using the native [inotify][] library 
@@ -178,6 +178,7 @@ Application Options:
   -I, --ignore=/knockturn/alley/borgin/brukes     Paths to ignore recursively. Repeat flag for multiple paths.
   -W, --max-user-watches=524288                   Upper limit on the number of watches per uid [fluffy defaults 524288]
   -Q, --max-queued-events=524288                  Upper limit on the number of events [fluffy defaults 524288]
+  -z, --reinit                                    Reinitiate watch on all root paths. [Avoid unless necessary]
 
 ```
 
@@ -225,9 +226,10 @@ path:   /tmp/sh-thd-1809946088
 
 There's still quite a few more to be done but these are the primary ones
 
- - Fluffy frontend _WIP_
  - Documentation _WIP_
- - Proper error reporting
+ - Fluffy frontend _WIP_
+ - Proper error reporting. For now, most error returns have been set -1 
+   deliberately without any error string or value.
  - Valgrind
  - Test cases
  - Doxygen?

@@ -28,6 +28,7 @@ int mqsend_watch(char *watch_path);
 int mqsend_ignore(char *ignore_path);
 int mqsend_max_user_watches(char *max_watches);
 int mqsend_max_queued_events(char *max_events);
+int mqsend_reinitiate();
 int mqsend_list_root_path();
 int mqsend_events_mask(uint32_t mask);
 
@@ -225,6 +226,43 @@ mqsend_max_queued_events(char *max_events)
 
 
 int
+mqsend_reinitiate()
+{
+	int reterr = 0;
+	mqd_t reinit = -1;
+	reinit = mq_open(mqfluffy, O_WRONLY);
+	if (reinit == (mqd_t) -1) {
+		reterr = errno;
+		perror("mq_open");
+		return reterr;
+	}
+
+	char *mqmsg = NULL;
+	mqmsg = calloc(1, sizeof(id_mqfluffy_reinitiate) + 1);
+	if (mqmsg == NULL) {
+		reterr = errno;
+		perror("calloc");
+		return reterr;
+	}
+
+	sprintf(mqmsg, "%c", id_mqfluffy_reinitiate);
+	mqmsg[strlen(mqmsg) + 1] = '\0';
+	if (mq_send(reinit, mqmsg, strlen(mqmsg) + 1, 0) == -1) {
+		reterr = errno;
+		perror("mq_send");
+		free(mqmsg);
+		return reterr;
+	}
+
+	if (mq_close(reinit)) {
+		perror("mq_close");
+	}
+	free(mqmsg);
+	return 0;
+}
+
+
+int
 mqsend_list_root_path()
 {
 	int reterr = 0;
@@ -278,6 +316,7 @@ main(int argc, char *argv[])
 	gchar **ignore_paths = NULL;
 	gchar *max_user_watches = NULL;
 	gchar *max_queued_events = NULL;
+	gboolean reinitiate = FALSE;
 	gboolean list_root_path = FALSE;
 	gboolean get_watch_nos = FALSE;
 
@@ -306,6 +345,11 @@ main(int argc, char *argv[])
 			"Upper limit on the number of events " \
 				"[fluffy defaults 524288]",
 			"524288" },
+		{ "reinit", 'z', 0, G_OPTION_ARG_NONE,
+			&reinitiate,
+			"Reinitiate watch on all root paths. " \
+				"[Avoid unless necessary]",
+			NULL },
 		/*
 		{ "list-root-paths", 'l', 0, G_OPTION_ARG_NONE, &list_root_path,
 			"List root paths being watched", NULL },
@@ -571,6 +615,13 @@ main(int argc, char *argv[])
 
 			g_strfreev(ignore_paths);
 			ignore_paths = NULL;
+			done = 1;
+		}
+
+		if (reinitiate) {
+			if (mqsend_reinitiate()) {
+				rc = -1;
+			}
 			done = 1;
 		}
 
