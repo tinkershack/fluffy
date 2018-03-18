@@ -60,6 +60,18 @@ _libfluffy_ is a better choice if you are planning to use it in
 production. [fluffy.h][] has the interface description and callables.  
 [example.c][] provides a sample.
 
+Until the documentation is completed, these Stack Overflow answers may 
+be of some reference.
+
+[Inotify: Odd behavior with directory 
+creations](https://stackoverflow.com/questions/47648301/inotify-odd-behavior-with-directory-creations/49347059#49347059)
+
+[Inotify linux watching 
+subdirectories](https://stackoverflow.com/questions/47673447/inotify-linux-watching-subdirectories/49345762#49345762)
+
+[How to use inotifywait to watch files within folder instead of 
+folder](https://stackoverflow.com/questions/47225008/how-to-use-inotifywait-to-watch-files-within-folder-instead-of-folder/49349226#49349226)
+
 
 ### Don't mind getting your hands dirty?
 
