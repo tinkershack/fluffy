@@ -390,8 +390,8 @@ main(int argc, char *argv[])
 {
 	gchar option_context[] = "[exit]";
 	gchar context_description[] = "Please report bugs at " \
-				     "https://github.com/six-k/fluffy or " \
-				     "raam@tinkershack.in\n";
+				     "https://github.com/tinkershack/fluffy "\
+				     "or raam@tinkershack.in\n";
 	gchar *print_out = NULL;
 	gchar *print_err = NULL;
 	GOptionEntry entries_g[]= {

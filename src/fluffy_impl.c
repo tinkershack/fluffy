@@ -3,7 +3,7 @@
 const char mqfluffy[] = "/mqfluffy";	/* Message queue name */
 const char id_mqfluffy_exit = 'x';
 const char id_mqfluffy_watch = 'w';
-const char id_mqfluffy_ignore = 'I';
+const char id_mqfluffy_ignore = 'i';
 const char id_mqfluffy_max_user_watches = 'U';
 const char id_mqfluffy_max_queued_events = 'Q';
 const char id_mqfluffy_reinitiate = 'z';

@@ -175,8 +175,10 @@ Application Options:
   -O, --outfile=./out.fluffy                      File to print output [default:stdout]
   -E, --errfile=./err.fluffy                      File to print errors [default:stderr]
   -w, --watch=/grimmauld/place/12                 Paths to watch recursively. Repeat flag for multiple paths.
-  -I, --ignore=/knockturn/alley/borgin/brukes     Paths to ignore recursively. Repeat flag for multiple paths.
-  -W, --max-user-watches=524288                   Upper limit on the number of watches per uid [fluffy defaults 524288]
+  -W, --watch-glob                                Paths to watch recursively: supports wildcards. Any non-option argument passed will be considered as paths. [/hogwarts/*/towers]
+  -i, --ignore=/knockturn/alley/borgin/brukes     Paths to ignore recursively. Repeat flag for multiple paths.
+  -I, --ignore-glob                               Paths to ignore recursively: supports wildcards. Any non-option argument passed will be considered as paths. [/hogwarts/*/dungeons]
+  -U, --max-user-watches=524288                   Upper limit on the number of watches per uid [fluffy defaults 524288]
   -Q, --max-queued-events=524288                  Upper limit on the number of events [fluffy defaults 524288]
   -z, --reinit                                    Reinitiate watch on all root paths. [Avoid unless necessary]
 

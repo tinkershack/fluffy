@@ -302,8 +302,8 @@ main(int argc, char *argv[])
 {
 	gchar option_context[] = "[\"/path/to/hogwarts/kitchen\"]";
 	gchar context_description[] = "Please report bugs at " \
-				     "https://github.com/six-k/fluffy or " \
-				     "raam@tinkershack.in\n";
+				     "https://github.com/tinkershack/fluffy "\
+				     "or raam@tinkershack.in\n";
 	gchar context_summary[] = "'fluffyctl' controls 'fluffy' program.\n"
 		"fluffy must be invoked before adding/removing watches. \n"
 		"By default all file system events are watched and reported. "
@@ -316,26 +316,44 @@ main(int argc, char *argv[])
 	gchar **ignore_paths = NULL;
 	gchar *max_user_watches = NULL;
 	gchar *max_queued_events = NULL;
+	gboolean watch_glob = FALSE;
+	gboolean ignore_glob = FALSE;
 	gboolean reinitiate = FALSE;
 	gboolean list_root_path = FALSE;
 	gboolean get_watch_nos = FALSE;
 
 	GOptionEntry main_entries_g[]= {
-		{ "outfile", 'O', 0, G_OPTION_ARG_FILENAME, &print_out,
+		{ "outfile", 'O', 0, G_OPTION_ARG_FILENAME,
+			&print_out,
 			"File to print output [default:stdout]",
 			"./out.fluffy" },
-		{ "errfile", 'E', 0, G_OPTION_ARG_FILENAME, &print_err,
+		{ "errfile", 'E', 0, G_OPTION_ARG_FILENAME,
+			&print_err,
 			"File to print errors [default:stderr]",
 			"./err.fluffy" },
-		{ "watch", 'w', 0, G_OPTION_ARG_FILENAME_ARRAY, &watch_paths,
+		{ "watch", 'w', 0, G_OPTION_ARG_FILENAME_ARRAY,
+			&watch_paths,
 			"Paths to watch recursively. Repeat flag for " \
 				"multiple paths.",
 			"/grimmauld/place/12" },
-		{ "ignore", 'I', 0, G_OPTION_ARG_FILENAME_ARRAY, &ignore_paths,
+		{ "watch-glob", 'W', 0, G_OPTION_ARG_NONE,
+			&watch_glob,
+			"Paths to watch recursively: supports wildcards. " \
+				"Any non-option argument passed will be " \
+				"considered as paths. [/hogwarts/*/towers]",
+			NULL },
+		{ "ignore", 'i', 0, G_OPTION_ARG_FILENAME_ARRAY,
+			&ignore_paths,
 			"Paths to ignore recursively. Repeat flag for " \
 				"multiple paths.",
 			"/knockturn/alley/borgin/brukes" },
-		{ "max-user-watches", 'W', 0, G_OPTION_ARG_STRING,
+		{ "ignore-glob", 'I', 0, G_OPTION_ARG_NONE,
+			&ignore_glob,
+			"Paths to ignore recursively: supports wildcards. " \
+				"Any non-option argument passed will be " \
+				"considered as paths. [/hogwarts/*/dungeons]",
+			NULL },
+		{ "max-user-watches", 'U', 0, G_OPTION_ARG_STRING,
 			&max_user_watches,
 			"Upper limit on the number of watches per uid " \
 				"[fluffy defaults 524288]",
@@ -595,6 +613,42 @@ main(int argc, char *argv[])
 			done = 1;
 		}
 
+		/*
+		 * To make use of the shell glob feature, allow multiple
+		 * paths to be passed without attaching each path with -w
+		 * option. After glib parses the options context, the left over
+		 * arguments remain in *argv[]. When something like
+		 * -W /foo/'*'/bar is provided from shell, then shell handles
+		 * the globbing, we handle the arguments.
+		 * All the left overs of *argv[] will be attributed to the
+		 * first glob option. If -W and -I flags are provided at the
+		 * same time, which ever we handle first receives all the
+		 * arguments.
+		 */
+		if (watch_glob) {
+			int j = 1;	/* argv[0] is program name, skip it */
+			do {
+				if (argc < 2) {
+					break;
+				}
+				char *resvpath = NULL;
+				resvpath = realpath(argv[j], NULL);
+				if (resvpath == NULL) {
+					perror("realpath");
+					rc = -1;
+					break;
+				}
+
+				if (mqsend_watch(resvpath)) {
+					rc = -1;
+				}
+				free(resvpath);
+				resvpath = NULL;
+			} while (argv[++j] != NULL);
+
+			done = 1;
+		}
+
 		if (ignore_paths != NULL) {
 			int j = 0;
 			do {
@@ -615,6 +669,42 @@ main(int argc, char *argv[])
 
 			g_strfreev(ignore_paths);
 			ignore_paths = NULL;
+			done = 1;
+		}
+
+		/*
+		 * To make use of the shell glob feature, allow multiple
+		 * paths to be passed without attaching each path with -w
+		 * option. After glib parses the options context, the left over
+		 * arguments remain in *argv[]. When something like
+		 * -I /foo/'*'/bar is provided from shell, then shell handles
+		 * the globbing, we handle the arguments.
+		 * All the left overs of *argv[] will be attributed to the
+		 * first glob option. If -W and -I flags are provided at the
+		 * same time, which ever we handle first receives all the
+		 * arguments.
+		 */
+		if (ignore_glob) {
+			int j = 1;	/* argv[0] is program name, skip it */
+			do {
+				if (argc < 2) {
+					break;
+				}
+				char *resvpath = NULL;
+				resvpath = realpath(argv[j], NULL);
+				if (resvpath == NULL) {
+					perror("realpath");
+					rc = -1;
+					break;
+				}
+
+				if (mqsend_ignore(resvpath)) {
+					rc = -1;
+				}
+				free(resvpath);
+				resvpath = NULL;
+			} while (argv[++j] != NULL);
+
 			done = 1;
 		}
 
