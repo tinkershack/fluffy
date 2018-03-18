@@ -35,6 +35,7 @@ void terminate_run();
 int process_fluffy_mqueue(struct epoll_event *evlist);
 int print_events(const struct fluffy_event_info *eventinfo, void *user_data);
 int set_print_events_mask(char *mask);
+int reinitiate_run();
 
 /* Function definitions */
 
@@ -63,65 +64,64 @@ print_events(const struct fluffy_event_info *eventinfo,
 		return 0;
 	}
 
-	fprintf(stdout, "\n");
-	fprintf(stdout, "event:\t");
+	PRINT_STDOUT("\n", "");
 	if (eventinfo->event_mask & FLUFFY_ACCESS &&
 	    print_events_mask & FLUFFY_ACCESS)
-		fprintf(stdout, "ACCESS, ");
+		PRINT_STDOUT("ACCESS,", "");
 	if (eventinfo->event_mask & FLUFFY_ATTRIB &&
 	    print_events_mask & FLUFFY_ATTRIB)
-		fprintf(stdout, "ATTRIB, ");
+		PRINT_STDOUT("ATTRIB,", "");
 	if (eventinfo->event_mask & FLUFFY_CLOSE_NOWRITE &&
 	    print_events_mask & FLUFFY_CLOSE_NOWRITE)
-		fprintf(stdout, "CLOSE_NOWRITE, ");
+		PRINT_STDOUT("CLOSE_NOWRITE,", "");
 	if (eventinfo->event_mask & FLUFFY_CLOSE_WRITE &&
 	    print_events_mask & FLUFFY_CLOSE_WRITE)
-		fprintf(stdout, "CLOSE_WRITE, ");
+		PRINT_STDOUT("CLOSE_WRITE,", "");
 	if (eventinfo->event_mask & FLUFFY_CREATE &&
 	    print_events_mask & FLUFFY_CREATE)
-		fprintf(stdout, "CREATE, ");
+		PRINT_STDOUT("CREATE,", "");
 	if (eventinfo->event_mask & FLUFFY_DELETE &&
 	    print_events_mask & FLUFFY_DELETE)
-		fprintf(stdout, "DELETE, ");
+		PRINT_STDOUT("DELETE,", "");
 	if (eventinfo->event_mask & FLUFFY_ROOT_DELETE &&
 	    print_events_mask & FLUFFY_ROOT_DELETE)
-		fprintf(stdout, "ROOT_DELETE, ");
+		PRINT_STDOUT("ROOT_DELETE,", "");
 	if (eventinfo->event_mask & FLUFFY_MODIFY &&
 	    print_events_mask & FLUFFY_MODIFY)
-		fprintf(stdout, "MODIFY, ");
+		PRINT_STDOUT("MODIFY,", "");
 	if (eventinfo->event_mask & FLUFFY_ROOT_MOVE &&
 	    print_events_mask & FLUFFY_ROOT_MOVE)
-		fprintf(stdout, "ROOT_MOVE, ");
+		PRINT_STDOUT("ROOT_MOVE,", "");
 	if (eventinfo->event_mask & FLUFFY_MOVED_FROM &&
 	    print_events_mask & FLUFFY_MOVED_FROM)
-		fprintf(stdout, "MOVED_FROM, ");
+		PRINT_STDOUT("MOVED_FROM,", "");
 	if (eventinfo->event_mask & FLUFFY_MOVED_TO &&
 	    print_events_mask & FLUFFY_MOVED_TO)
-		fprintf(stdout, "MOVED_TO, ");
+		PRINT_STDOUT("MOVED_TO,", "");
 	if (eventinfo->event_mask & FLUFFY_OPEN &&
 	    print_events_mask & FLUFFY_OPEN)
-		fprintf(stdout, "OPEN, ");
+		PRINT_STDOUT("OPEN,", "");
 
 	if (eventinfo->event_mask & FLUFFY_IGNORED &&
 	    print_events_mask & FLUFFY_IGNORED)
-		fprintf(stdout, "IGNORED, ");
+		PRINT_STDOUT("IGNORED,", "");
 	if (eventinfo->event_mask & FLUFFY_ISDIR &&
 	    print_events_mask & FLUFFY_ISDIR)
-		fprintf(stdout, "ISDIR, ");
+		PRINT_STDOUT("ISDIR,", "");
 	if (eventinfo->event_mask & FLUFFY_UNMOUNT &&
 	    print_events_mask & FLUFFY_UNMOUNT)
-		fprintf(stdout, "UNMOUNT, ");
+		PRINT_STDOUT("UNMOUNT,", "");
 	if (eventinfo->event_mask & FLUFFY_ROOT_IGNORED &&
 	    print_events_mask & FLUFFY_ROOT_IGNORED)
-		fprintf(stdout, "ROOT_IGNORED, ");
+		PRINT_STDOUT("ROOT_IGNORED,", "");
 	if (eventinfo->event_mask & FLUFFY_WATCH_EMPTY &&
 	    print_events_mask & FLUFFY_WATCH_EMPTY)
-		fprintf(stdout, "WATCH_EMPTY, ");
+		PRINT_STDOUT("WATCH_EMPTY,", "");
 	if (eventinfo->event_mask & FLUFFY_Q_OVERFLOW &&
 	    print_events_mask & FLUFFY_Q_OVERFLOW)
-		fprintf(stdout, "Q_OVERFLOW, ");
-	fprintf(stdout, "\n");
-	fprintf(stdout, "path:\t%s\n", eventinfo->path ? eventinfo->path : "");
+		PRINT_STDOUT("Q_OVERFLOW,", "");
+	PRINT_STDOUT("\t", "");
+	PRINT_STDOUT("%s", eventinfo->path ? eventinfo->path : "", "");
 
 	/*
 	if (eventinfo->event_mask & FLUFFY_WATCH_EMPTY) {

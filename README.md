@@ -187,42 +187,75 @@ Application Options:
 #### fluffy event log snippet
 
 ```
-event:  CLOSE_NOWRITE, ISDIR, 
-path:   /tmp/.Test-unix
-
-event:  ACCESS, ISDIR, 
-path:   /tmp/systemd-private-6f74e3b317d0471b8546d2a83261b721-cups.service-3wkDKu
-
-event:  ACCESS, ISDIR, 
-path:   /tmp/systemd-private-6f74e3b317d0471b8546d2a83261b721-cups.service-3wkDKu/tmp
-
-event:  MODIFY, 
-path:   /var/log/messages
-
-event:  MODIFY, 
-path:   /var/log/syslog
-
-event:  OPEN, ISDIR, 
-path:   /var/log
-
-event:  ACCESS, ISDIR, 
-path:   /var/log
-
-event:  CLOSE_NOWRITE, ISDIR, 
-path:   /var/log
-
-event:  OPEN, ISDIR, 
-path:   /var/log
-
-event:  ACCESS, ISDIR, 
-path:   /var/log
-
-event:  CLOSE_NOWRITE, ISDIR, 
-path:   /var/log
-
-event:  CREATE, 
-path:   /tmp/sh-thd-1809946088
+MODIFY, /var/log/daemon.log
+MODIFY, /var/log/syslog
+MODIFY, /var/log/kern.log
+MODIFY, /var/log/messages
+GNORED, /var/log/apache2
+IGNORED,        /var/log/tor
+IGNORED,        /var/log/vmware
+CREATE,ISDIR,   /tmp/test
+ACCESS,ISDIR,   /tmp/test
+ACCESS,ISDIR,   /tmp/test
+CLOSE_NOWRITE,ISDIR,    /tmp/test
+CREATE, /tmp/test/f1
+OPEN,   /tmp/test/f1
+ATTRIB, /tmp/test/f1
+CLOSE_WRITE,    /tmp/test/f1
+OPEN,   /tmp/test/f1
+MODIFY, /tmp/test/f1
+MODIFY, /tmp/test/f1
+MODIFY, /tmp/test/f1
+CLOSE_WRITE,    /tmp/test/f1
+IGNORED,ROOT_IGNORED,WATCH_EMPTY,       /tmp
 ```
+
+
+#### Perform actions on events from CLI
+
+**CAUTION** It's is recommended that you use `libfluffy` to perform 
+actions on events. 
+
+Let's consider a trivial action: `ls -l` the path on a MODIFY event
+
+At terminal:1
+
+```
+root@six-k:/home/lab/fluffy# fluffy | \
+while read events path; do \
+    if echo $events | grep -qie "MODIFY"; then \
+        ls -l $path; \
+    fi \
+done
+```
+
+At terminal:2
+
+```
+root@six-k:/opt/test2# fluffyctl -w ./
+root@six-k:/opt/test2# touch f1
+root@six-k:/opt/test2# ls -l
+total 0
+-rw-r--r-- 1 root root 0 Mar 18 19:38 f1
+root@six-k:/opt/test2# echo "this is a MODIFY" | cat >> f1
+root@six-k:/opt/test2# echo "this is another MODIFY" | cat >> f1
+root@six-k:/opt/test2# fluffy exit
+```
+
+Output from terminal:1: [cont.]
+
+```
+root@six-k:/home/lab/fluffy# fluffy | \
+> while read events path; do \
+>     if echo $events | grep -qie "MODIFY"; then \
+>         ls -l $path; \
+>     fi \
+> done
+-rw-r--r-- 1 root root 17 Mar 18 19:38 /opt/test2/f1
+-rw-r--r-- 1 root root 40 Mar 18 19:38 /opt/test2/f1
+root@six-k:/home/lab/fluffy# 
+```
+
 
 ### TODO: Fluffy is a WIP
 
