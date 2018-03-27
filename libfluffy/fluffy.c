@@ -175,7 +175,7 @@ static gint search_tree_g(gpointer pathname, gpointer compare_path);
 
 static char *form_event_path(char *wdpath, uint32_t ilen, char *iname);
 
-int dir_tree_add_watch(const char *pathname, const struct stat *sbuf,
+static int dir_tree_add_watch(const char *pathname, const struct stat *sbuf,
     int type, struct FTW *ftwb);
 
 static int fluffy_setup_context(int fluffy_handle);
@@ -212,7 +212,7 @@ static int fluffy_handle_removal(int fluffy_handle, char *removethis);
 static int fluffy_handle_addition(int fluffy_handle,
     struct inotify_event *ievent, struct fluffy_wd_info *wdinfop);
 
-static int fluffy_handle_move(int fluffy_handle,
+static int fluffy_handle_moved_from(int fluffy_handle,
     struct inotify_event *ievent, struct fluffy_wd_info *wdinfop);
 ;
 static int fluffy_handle_ignored(int fluffy_handle,
@@ -228,9 +228,24 @@ static void fluffy_thread_cleanup_unlock(void *mutex);
 
 static void *fluffy_start_context_thread(void *flhandle);
 
+/* Notes & other relevant stuff */
+
+/*
+ * NOTE:
+ *
+ * pthread_cleanup_pop() must be in the same lexical scope as that
+ * of pthread_cleanup_push(). This means that the convenience of
+ * returning from anywhere, regardless of block scope, is lost. Bummer.
+ *
+ * Employ do-while(0) to break out and reach the deferred return.
+ */
+
 
 /* function definitions */
 
+/*
+ * fluffy.h contains this function description
+ */
 int
 fluffy_set_max_queued_events(const char *maxvalp)
 {
@@ -267,7 +282,9 @@ fluffy_set_max_queued_events(const char *maxvalp)
 	return 0;
 }
 
-
+/*
+ * fluffy.h contains this function description
+ */
 int
 fluffy_set_max_user_instances(const char *maxvalp)
 {
@@ -297,7 +314,9 @@ fluffy_set_max_user_instances(const char *maxvalp)
 	return 0;
 }
 
-
+/*
+ * fluffy.h contains this function description
+ */
 int
 fluffy_set_max_user_watches(const char *maxvalp)
 {
@@ -344,7 +363,16 @@ fluffy_wd_info_new()
 	return wdinfop;
 }
 
-
+/*
+ * Function:	fluffy_context_info_new
+ *
+ * Allocate memory for a fluffy_context_info and assign appropriate values.
+ *
+ * args:
+ * 	- None
+ * return:
+ * 	- A pointer to fluffy_context_info when successful, NULL otherwise
+ */
 static struct fluffy_context_info *
 fluffy_context_info_new()
 {
@@ -379,7 +407,12 @@ fluffy_context_info_new()
 	return ctxinfop;
 }
 
-
+/*
+ * Function:	free_context_table_info_g
+ *
+ * Called by glib when an entry is removed from
+ * fluffy_track.context_table. Frees up records.
+ */
 static void
 free_context_table_info_g(struct fluffy_context_info *ctxinfop)
 {
@@ -398,7 +431,23 @@ free_wd_table_info_g(struct fluffy_wd_info *wdinfop)
 	free(wdinfop);
 }
 
-
+/*
+ * Function:	fluffy_handoff_event
+ *
+ * Each inotify event is handed off to the client callback function
+ * before internal processing. Since the event processing within a context is
+ * serial, the client will have to fork/thread and return as soon as a possible
+ * in order to avoid event queue overflows; that is if event order isn't a
+ * concern. To main event order, serial processing is the only way.
+ *
+ * args:
+ * 	- int: fluffy context handle
+ * 	- struct inotify_event *: a pointer to the inotify event
+ * 	- struct fluffy_wd_info *: a pointer to the associated watch info. Null
+ * 		when the event is a queue overflow
+ * return:
+ * 	- int: 0 when successful, error value otherwise to terminate context
+ */
 static int
 fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
     struct fluffy_wd_info *wdinfop)
@@ -412,11 +461,17 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 		return 0;
 	}
 
+	/*
+	 * Along with the appropriate inotify event mask, OR fluffy context
+	 * event mask when required. This mask will be passed on to the client
+	 * event callback function.
+	 */
 	uint32_t handoff_mask = ie->mask;
 	
-	int is_not_root = 0;
-
+	int is_not_root = 0;	/* Positive when it isn't a root path */
 	char *eventpathp = NULL;
+
+	/* No event path when it's a queue overflow event */
 	if (!(ie->mask & IN_Q_OVERFLOW)) {
 		is_not_root = fluffy_is_root_path(fluffy_handle,
 				wdinfop->path);
@@ -428,6 +483,11 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 			return -1;
 		}
 
+		/*
+		 * Ignore IN_MOVE_SELF & IN_DELETE_SELF unless it's on the root
+		 * path. The parent watch path will catch these events and
+		 * report them, including this regardless is redundant.
+		 */
 		if ((is_not_root)		&&
 		    ((ie->mask & IN_MOVE_SELF)	||
 		    (ie->mask & IN_DELETE_SELF))) {
@@ -435,6 +495,11 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 			return 0;
 		}
 
+		/*
+		 * If event path is a root path and the watch on it is removed,
+		 * send a FLUFFY_ROOT_IGNORED event. If there's no more paths
+		 * to watch, send a FLUFFY_WATCH_EMPTY event as well.
+		 */
 		if ((is_not_root == 0)	&&
 		    (ie->mask & IN_IGNORED)) {
 			handoff_mask |= FLUFFY_ROOT_IGNORED;
@@ -443,6 +508,11 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 			}
 		}
 
+		/*
+		 * If there's an event on a dir, and there's a watch set on its
+		 * parent directory, then the events are reported twice- one by
+		 * the child, one by the parent. Don't report twice.
+		 */
 		if (!(ie->mask & IN_MODIFY)	&&
 		    !(ie->mask & IN_MOVED_FROM)	&&
 		    !(ie->mask & IN_MOVED_TO)	&&
@@ -456,6 +526,7 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 		}
 	}
 
+	/* Pass on the event info to the client's callback function. */
 	struct fluffy_event_info *evtinfop;
 	evtinfop = calloc(1, sizeof(struct fluffy_event_info));
 	if (evtinfop == NULL) {
@@ -469,12 +540,23 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 
 	free(eventpathp);
 	free(evtinfop);
-	return ret;
+	return ret;	/* return whatever the client returned */
 
 }
 
-
-int
+/*
+ * Function:	dir_tree_add_watch
+ *
+ * This function must not be called directly, rather passed as a function
+ * pointer to nftw() which in turn calls this function on every path it
+ * encounters.
+ *
+ * args:
+ * 	nftw() provides the arguments
+ * return:
+ * 	- int: 0 to continue the tree walk, none zero to terminate the walk
+ */
+static int
 dir_tree_add_watch(const char *pathname, const struct stat *sbuf, int type,
     struct FTW *ftwb)
 {
@@ -505,7 +587,7 @@ dir_tree_add_watch(const char *pathname, const struct stat *sbuf, int type,
 		    pathname)) {
 			/*
 			 * This had been a root watch path previously.
-			 * Since it is a regular descendent path now, remove
+			 * Since it is a regular descendant path now, remove
 			 * it from the root path list.
 			 */
 			if (!g_hash_table_remove(ctxinfop->root_path_table,
@@ -628,7 +710,19 @@ reinit_each_context_g(gpointer fluffy_handle, gpointer value,
 	}
 }
 
-
+/*
+ * Function:	search_tree_g
+ *
+ * This function is not called directly, rather glib g_search_tree function
+ * calls this on every entry it encounters from the tree. The return value
+ * decides the search path because the tree is a search tree; ordered.
+ *
+ * args:
+ * 	- gpointer: entry from the search tree
+ * 	- gpointer: string to compare the path prefix
+ * return:
+ *	- gint: 0,-1 or 1 appropriately. Same logic as that of strmp()'s
+ */
 static gint
 search_tree_g(gpointer pathname, gpointer compare_path)
 {
@@ -641,6 +735,11 @@ search_tree_g(gpointer pathname, gpointer compare_path)
 		pthread_exit((void *)-1);
 	}
 
+	/*
+	 * compare_path is the prefix string that we will match with pathname.
+	 * Each descendant will be a directory, so, '/' is the separator we
+	 * must concatenate before performing the comparison.
+	 */
 	tocmp = strncpy(tocmp, cmp_for_each_path, strlen(cmp_for_each_path) +
 		    1);
 	tocmp = strncat(tocmp, "/", 2);
@@ -660,7 +759,21 @@ search_tree_g(gpointer pathname, gpointer compare_path)
 	return cmp_ret;
 }
 
-
+/*
+ * Function:	form_event_path
+ *
+ * Form the event path by appending the filename where the action occured with
+ * the path which is reporting it. inotify watch descriptor is on the reporting
+ * path. If the action occured on the reporting path itself, then there's
+ * nothing to append because ilen will be zero and iname will point to nothing.
+ *
+ * args:
+ * 	- char *:	pointer to the reporting path
+ * 	- uint32_t:	length of the filename in concern if it's a descendant
+ * 	- char *:	pointer to the descendant filename if any
+ * return:
+ * 	- char *:	pointer to the event path, must be freed by the caller
+ */
 static char *
 form_event_path(char *wdpath, uint32_t ilen, char *iname)
 {
@@ -674,13 +787,27 @@ form_event_path(char *wdpath, uint32_t ilen, char *iname)
 
 	currpath = strncpy(currpath, wdpath, strlen(wdpath) + 1);
 	if (ilen) {
+		/* Action was on a descendant file, so, append it. */
 		currpath = strncat(currpath, "/", 2);
 		currpath = strncat(currpath, iname, strlen(iname) + 1);
 	}
 	return currpath;
 }
 
-
+/*
+ * Function:	fluffy_add_watch
+ *
+ * Watch a path recursively.
+ *
+ * args:
+ * 	- int: fluffy_context handle
+ * 	- const char *: path to watch recursively
+ * 	- int is_real_path_check: non zero value when the path needs to be a 
+ * 		canonicalized absolute path
+ * 	- int is_root_path: non zero value if the path is a root path
+ * return:
+ * 	- int: 0 when successful, error value otherwise
+ */
 static int
 fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
     int is_real_path_check, int is_root_path)
@@ -688,6 +815,11 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 	char *addpath = NULL;
 	int reterr = 0;
 
+	/*
+	 * Check whether the path is an input argument received from the user.
+	 * All paths received from the client/user directly must be checked &
+	 * transformed to a real path.
+	 */
 	if (is_real_path_check) {
 		addpath = realpath(pathtoadd, NULL);
 		if (addpath == NULL) {
@@ -696,6 +828,10 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 			return reterr;
 		}
 	} else {
+		/*
+		 * This path need not be resolved. It's assumed that it has
+		 * been resolved already.
+		 */
 		addpath = strdup(pathtoadd);
 		if (addpath == NULL) {
 			reterr = errno;
@@ -719,6 +855,7 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
 	    &ctxinfop->mutex);
 
+	/* Add appropriate records if it's a root path */
 	if (is_root_path) {
 		/* Add only if the path is not in the watch list already */
 		if (!g_hash_table_contains(ctxinfop->path_table,
@@ -746,6 +883,7 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 	do {
 		fluffy_track.curr_ctxinfop = ctxinfop;
 
+		/* Watch the path recursively */
 		if (nftw(addpath, dir_tree_add_watch, 30, FTW_FLAGS) == -1) {
 			reterr = errno;
 			perror("nftw");
@@ -758,7 +896,16 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 	return reterr;
 }
 
-
+/*
+ * Function:	fluffy_cleanup_context_info_records
+ *
+ * The intention is to clean up the context records, not to destroy them.
+ *
+ * args:
+ * 	- int: fluffy context handle
+ * return:
+ * 	- int: 0 when successful, error value otherwise
+ */
 static int
 fluffy_cleanup_context_info_records(int fluffy_handle)
 {
@@ -778,6 +925,7 @@ fluffy_cleanup_context_info_records(int fluffy_handle)
 	    &ctxinfop->mutex);
 
 	do {
+		/* Close inotify. This will be reinitiated if required */
 		if (close(ctxinfop->inotify_fd) == -1) {
 			reterr = errno;
 			perror("close");
@@ -787,6 +935,7 @@ fluffy_cleanup_context_info_records(int fluffy_handle)
 		
 		g_hash_table_remove_all(ctxinfop->wd_table);
 		g_hash_table_remove_all(ctxinfop->path_table);
+		/* There's is no 'remove all' function call for glib trees */
 		g_tree_destroy(ctxinfop->path_tree);
 		ctxinfop->path_tree = NULL;
 		ctxinfop->path_tree = g_tree_new_full((GCompareDataFunc)strcmp,
@@ -942,7 +1091,16 @@ fluffy_initiate_inotify(int fluffy_handle)
 	return ret;
 }
 
-
+/*
+ * Function:	fluffy_destroy_context
+ *
+ * Releases resources attached with a fluffy context
+ *
+ * args:
+ * 	- void *: fluffy context handle carrying integer value
+ * return:
+ * 	- void
+ */
 static void
 fluffy_destroy_context(void *flhandle)
 {
@@ -956,6 +1114,7 @@ fluffy_destroy_context(void *flhandle)
 			break;
 		}
 
+		/* Clean up the records */
 		if (fluffy_cleanup_context_info_records(fluffy_handle)) {
 			/* best effort */
 		}
@@ -973,7 +1132,7 @@ fluffy_destroy_context(void *flhandle)
 			/* best effort */
 		}
 
-
+		/* Destroy the cleaned up resources */
 		g_hash_table_destroy(ctxinfop->wd_table);
 		ctxinfop->wd_table = NULL;
 		g_hash_table_destroy(ctxinfop->path_table);
@@ -1007,7 +1166,16 @@ fluffy_reinitiate_all_contexts()
 	return 0;
 }
 
-
+/*
+ * Function:	fluffy_reinitate_context
+ *
+ * Cleanup the records and reset watches on the root paths
+ *
+ * args:
+ * 	- int: fluffy context handle
+ * return:
+ * 	- int: 0 when successful, error value otherwise
+ */
 int
 fluffy_reinitiate_context(int fluffy_handle)
 {
@@ -1019,16 +1187,19 @@ fluffy_reinitiate_context(int fluffy_handle)
 		return -1;
 	}
 
+	/* Cleanup the context records and close the inotify instance */
 	reterr = fluffy_cleanup_context_info_records(fluffy_handle);
 	if (reterr) {
 		return reterr;
 	}
 
+	/* Acquire a fresh queue */
 	reterr = fluffy_initiate_inotify(fluffy_handle);
 	if (reterr) {
 		return reterr;
 	}
 
+	/* Set watches on the root paths */
 	g_hash_table_foreach(ctxinfop->root_path_table,
 	    (GHFunc) watch_each_root_path_g, GINT_TO_POINTER(fluffy_handle));
 
@@ -1110,7 +1281,18 @@ fluffy_setup_context(int fluffy_handle)
 	return 0;
 }
 
-
+/*
+ * Function:	fluffy_is_root_path
+ *
+ * Check whether the path is a root path. Root paths are what the client
+ * adds to the watch.
+ *
+ * args:
+ * 	- int:	fluffy context handle
+ * 	- char *: a char pointer to the path
+ * return:
+ * 	- int:	0 when it's a root path, error value otherwise
+ */
 static int
 fluffy_is_root_path(int fluffy_handle, char *path)
 {
@@ -1140,11 +1322,29 @@ fluffy_is_root_path(int fluffy_handle, char *path)
 	return reterr;
 }
 
-
+/*
+ * Function:	fluffy_handle_qoverflow
+ *
+ * On an IN_Q_OVERFLOW event, reinitate inotify instance and the associated
+ * records. This is to setup watches from scratch again because events were
+ * possibly dropped when the queue was overflow. 
+ *
+ * args:
+ * 	- int: fluffy context handle
+ * return:
+ * 	- int: 0 when successful, error value otherwise
+ */
 static int
 fluffy_handle_qoverflow(int fluffy_handle)
 {
 	int reterr = 0;
+	/*
+	 * TODO:
+	 * This decision must be made by the user. Bring in a field to
+	 * accommodate this preference. Context termination probably makes
+	 * more sense than reinitation as a default action unless otherwise the
+	 * user prefers to reinitiate.
+	 */
 	reterr = fluffy_reinitiate_context(fluffy_handle);
 	if (reterr) {
 		PRINT_STDERR("Reinitiation failed!\n", "");
@@ -1154,6 +1354,18 @@ fluffy_handle_qoverflow(int fluffy_handle)
 }
 
 
+/*
+ * Function:	fluffy_handle_addition
+ *
+ * Set watch on the path. A wrapper function of fluffy_add_watch
+ *
+ * args:
+ * 	- int: fluffy context handle
+ * 	- struct inotify_event *: a pointer to the inotify event
+ * 	- struct fluffy_wd_info *: a pointer to the associated watch info
+ * return:
+ * 	- int: 0 when successful, error value otherwise to terminate context
+ */
 static int
 fluffy_handle_addition(int fluffy_handle, struct inotify_event *ievent,
     struct fluffy_wd_info *wdinfop)
@@ -1167,6 +1379,7 @@ fluffy_handle_addition(int fluffy_handle, struct inotify_event *ievent,
 		return -1;
 	}
 
+	/* Since this path is already in our records, it's a real path */
 	reterr = fluffy_add_watch(fluffy_handle, currpath, 0, 0);
 	if (reterr) {
 		PRINT_STDERR("%s\n", strerror(reterr));
@@ -1177,7 +1390,20 @@ fluffy_handle_addition(int fluffy_handle, struct inotify_event *ievent,
 	return reterr;
 }
 
-
+/*
+ * Function:	fluffy_handle_ignored
+ *
+ * When an ignored event is caught, it means the path is not under inotify's
+ * watch anymore. Cleanup fluffy records to remove the path to prevent holding
+ * stale entries.
+ *
+ * args:
+ * 	- int: fluffy context handle
+ * 	- struct inotify_event *: a pointer to the inotify event
+ * 	- struct fluffy_wd_info *: a pointer to the associated watch info
+ * return:
+ * 	- int: 0 when successful, error value otherwise to terminate context
+ */
 static int
 fluffy_handle_ignored(int fluffy_handle, struct inotify_event *ievent,
     struct fluffy_wd_info *wdinfop)
@@ -1219,9 +1445,20 @@ fluffy_handle_ignored(int fluffy_handle, struct inotify_event *ievent,
 	return 0;
 }
 
-
+/*
+ * Function:	fluffy_handle_moved_from
+ *
+ * A wrapper to fluffy_handle_removal
+ *
+ * args:
+ * 	- int: fluffy context handle
+ * 	- struct inotify_event *: a pointer to the inotify event
+ * 	- struct fluffy_wd_info *: a pointer to the associated watch info
+ * return:
+ * 	- int: 0 when successful, error value otherwise to terminate context
+ */
 static int
-fluffy_handle_move(int fluffy_handle, struct inotify_event *ievent,
+fluffy_handle_moved_from(int fluffy_handle, struct inotify_event *ievent,
     struct fluffy_wd_info *wdinfop)
 {
 	int reterr = 0;
@@ -1234,7 +1471,7 @@ fluffy_handle_move(int fluffy_handle, struct inotify_event *ievent,
 
 	reterr = fluffy_handle_removal(fluffy_handle, movepath);
 	if (reterr) {
-		/* nothing? */
+		/* Nothing? */
 	}
 
 	free(movepath);
@@ -1243,7 +1480,16 @@ fluffy_handle_move(int fluffy_handle, struct inotify_event *ievent,
 	return  reterr;
 }
 
-
+/*
+ * Function:	fluffy_handle_removal
+ *
+ * Remove the watches on a path recursively.
+ *
+ * args:
+ * 	- int: fluffy context handle
+ * return:
+ * 	- char *: path to remove watch recursively
+ */
 static int
 fluffy_handle_removal(int fluffy_handle, char *removethis)
 {
@@ -1267,7 +1513,23 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
 	    &ctxinfop->mutex);
 
+	/*
+	 * Say, the path to be removed is /hogwarts/dungeons
+	 *
+	 * Dir tree is 
+	 * 	- /hogwarts/dungeons/
+	 * 		- /hogwarts/dungeons/eastwing
+	 * 		- /hogwarts/dungeons/grounds
+	 * 		- /hogwarts/dungeons/lakeside
+	 * 		- /hogwarts/dungeons/southwing
+	 *
+	 * First /hogwarts/dungeons will be removed from fluffy records. After
+	 * which, the path tree will be searched for strings that start with
+	 * /hogwarts/dungeons/. One by one, each of the descendants are
+	 * removed until there's none left.
+	 */
 	do {
+		/* Get the watch descriptor of the path to be removed */
 		toremwd = (struct fluffy_wd_info *)g_hash_table_lookup(
 				ctxinfop->path_table, cmp_for_each_path);
 		if (toremwd == NULL) {
@@ -1278,6 +1540,7 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 			break;
 		}
 
+		/* Remove fluffy records of /hogwarts/dungeons */
 		if (!g_tree_remove(ctxinfop->path_tree,
 		    (const char *)cmp_for_each_path)) {
 			PRINT_STDERR("Couldnot remove %s from the tree\n", \
@@ -1285,6 +1548,7 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 		}
 
 		int iwdtmp = -1;
+		/* Remove inotify watch on /hogwarts/dungeons */
 		iwdtmp = inotify_rm_watch(ctxinfop->inotify_fd, toremwd->wd);
 		if (iwdtmp == -1) {
 			reterr = errno;
@@ -1294,7 +1558,9 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 		}
 		toremwd = NULL;
 
+		/* Lookup for descendants one after another and remove */
 		while (1) {
+			/* Return the first descendant entry that matches */
 			wdtp = g_tree_search(ctxinfop->path_tree,
 					(GCompareFunc)search_tree_g,
 					(gpointer)cmp_for_each_path);
@@ -1302,7 +1568,14 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 				break;
 			}
 
+			/*
+			 * On the first iteration /hogwarts/dungeons/eastwing
+			 * will be returned. On consequent iterations, other
+			 * descendants will be found and returned as well.
+			 */
+
 			int iwd = -1;
+			/* Remove the inotify watch on the returned entry */
 			iwd = inotify_rm_watch(ctxinfop->inotify_fd,
 					GPOINTER_TO_INT(wdtp));
 			if (iwd == -1) {
@@ -1322,12 +1595,19 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 				reterr = -1;
 				break;
 			}
+			/* Remove fluffy records of the returned entry */
 			if (!g_tree_remove(ctxinfop->path_tree,
 			    (const char *)thiswd->path)) {
 				PRINT_STDERR("Couldnot remove %s " \
 				    "from the tree\n", thiswd->path);
 			}
 			thiswd = NULL;
+
+			/*
+			 * Now that this entry has been removed, continue to
+			 * lookup for descendants. No more dungeons in the
+			 * eastwing, move along to find the other dungeons.
+			 */
 		}
 	} while(0);
 	pthread_cleanup_pop(1);		/* Unlock mutex */
@@ -1337,7 +1617,21 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 	return reterr;
 }
 
-
+/*
+ * Function:	fluffy_process_inotify_queue
+ *
+ * Each event is processed serially to guarantee event order. If the users
+ * event callback function stalls longer, the possibility of a queue overflow
+ * is higher. Upon the callback function's return, handle the event with
+ * appopriate event action for internal functionality that is transparent to
+ * the user.
+ *
+ * args:
+ * 	- int:	fluffy context handle
+ * 	- struct epoll_event: structure pointer of the event info from epoll
+ * return:
+ * 	- int:	0 when successful, error value otherwise to terminate context
+ */
 static int
 fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 {
@@ -1361,107 +1655,148 @@ fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 			return reterr;
 		}
 		return 0;
-
-	} else if (evlist->events & EPOLLIN) {
-		char *iebuf;
-		iebuf = calloc(NR_INOTIFY_EVENTS,
-				sizeof(struct inotify_event) + NAME_MAX + 1);
-		if (iebuf == NULL) {
-			reterr = errno;
-			perror("calloc");
-			return  reterr;
-		}
-
-		nrbytes = read(evlist->data.fd, iebuf,
-				NR_INOTIFY_EVENTS *
-				(sizeof(struct inotify_event) +
-				 NAME_MAX + 1));
-		if (nrbytes == -1) {
-			reterr = errno;
-			perror("read");
-			return  reterr;
-		}
-		if (nrbytes == 0) {
-			return -1;
-		}
-
-		struct inotify_event *ievent = NULL;
-		char *p = NULL;
-		for (p = iebuf; p < iebuf + nrbytes; ) {
-			ievent = (struct inotify_event *) p;
-			p += sizeof(struct inotify_event) + ievent->len;
-
-			struct fluffy_wd_info *wdinfop = NULL;
-			wdinfop = (struct fluffy_wd_info *)g_hash_table_lookup(
-					ctxinfop->wd_table,
-					GINT_TO_POINTER(ievent->wd));
-			if (wdinfop == NULL &&
-			    !(ievent->mask & IN_Q_OVERFLOW)) {
-				PRINT_STDERR("Could not lookup wd %d\n", \
-						ievent->wd);
-				continue;
-			}
-
-			if(fluffy_handoff_event(fluffy_handle,
-			    ievent, wdinfop) != 0) {
-				return -1;
-			}
-
-			if (ievent->mask & IN_Q_OVERFLOW) {
-				PRINT_STDERR("Queue overflow, " \
-					"reinitiating all watches!\n", "");
-				if (fluffy_handle_qoverflow(fluffy_handle)) {
-					return  -1;
-				}
-				break;
-			}
-
-			if (((ievent->mask & IN_MOVED_TO) &&
-			    (ievent->mask & IN_ISDIR)) ||
-			    ((ievent->mask & IN_CREATE) &&
-			    (ievent->mask & IN_ISDIR))) {
-				reterr = fluffy_handle_addition(fluffy_handle,
-						ievent, wdinfop);
-				if (reterr) {
-					return reterr;
-				}
-
-			} else if ((ievent->mask & IN_MOVED_FROM) &&
-			    (ievent->mask & IN_ISDIR)) {
-				reterr = fluffy_handle_move(fluffy_handle,
-						ievent, wdinfop);
-				if (reterr) {
-					return reterr;
-				}
-
-			}
-
-			if ((ievent->mask & IN_MOVE_SELF)) {
-				reterr = fluffy_is_root_path(fluffy_handle,
-						wdinfop->path);
-				if (reterr == 0) {
-					reterr = fluffy_handle_removal(
-							fluffy_handle,
-							wdinfop->path);
-					if (reterr) {
-						return reterr;
-					}
-				}
-			}
-
-			if (ievent->mask & IN_IGNORED) {
-				reterr = fluffy_handle_ignored(fluffy_handle,
-						ievent, wdinfop);
-				if (reterr) {
-					return reterr;
-				}
-			}
-
-
-		}
-		free(iebuf);
-		iebuf = NULL;
 	}
+	
+	if (!(evlist->events & EPOLLIN)) {
+		/* Shouldn't be happening */
+		return 0;
+	}
+
+	char *iebuf;	/* inotify events buffer */
+	iebuf = calloc(NR_INOTIFY_EVENTS,
+			sizeof(struct inotify_event) + NAME_MAX + 1);
+	if (iebuf == NULL) {
+		reterr = errno;
+		perror("calloc");
+		return  reterr;
+	}
+
+	/* Get the inotify event */
+	nrbytes = read(evlist->data.fd, iebuf,
+			NR_INOTIFY_EVENTS *
+			(sizeof(struct inotify_event) +
+			 NAME_MAX + 1));
+	if (nrbytes == -1) {
+		reterr = errno;
+		perror("read");
+		return  reterr;
+	}
+	if (nrbytes == 0) {
+		return -1;
+	}
+
+	/*
+	 * inotify event pointer to traverse the events in the buffer, maximum
+	 * of NR_INOTIFY_EVENTS events.
+	 */
+	struct inotify_event *ievent = NULL;
+	char *p = NULL;
+	for (p = iebuf; p < iebuf + nrbytes; ) {
+		ievent = (struct inotify_event *) p;
+		/* Prepare the pointer for the next event processing */
+		p += sizeof(struct inotify_event) + ievent->len;
+
+		/* Get the associated info of this inotify watch descriptor */
+		struct fluffy_wd_info *wdinfop = NULL;
+		wdinfop = (struct fluffy_wd_info *)g_hash_table_lookup(
+				ctxinfop->wd_table,
+				GINT_TO_POINTER(ievent->wd));
+		/*
+		 * If the event is a IN_Q_OVERFLOW, there will be no associated
+		 * watch descriptor. The lookup will fail, so rule out this
+		 * case.
+		 */
+		if (wdinfop == NULL &&
+		    !(ievent->mask & IN_Q_OVERFLOW)) {
+			PRINT_STDERR("Could not lookup wd %d\n", \
+					ievent->wd);
+			continue;
+		}
+
+		/*
+		 * Even if it's a IN_Q_OVERFLOW event, handoff regardless. The
+		 * fluffy_handoff_event will take care of it. Do not have to
+		 * worry about wdinfop being NULL.
+		 */
+		if(fluffy_handoff_event(fluffy_handle,
+		    ievent, wdinfop) != 0) {
+			return -1; /* A non-zero return terminates context */
+		}
+
+		/*
+		 * Event has been reported to the client, now handle it to suit
+		 * our functionalities.
+		 */
+
+		/* Handle queue overflow */
+		if (ievent->mask & IN_Q_OVERFLOW) {
+			PRINT_STDERR("Queue overflow, " \
+				"reinitiating all watches!\n", "");
+			if (fluffy_handle_qoverflow(fluffy_handle)) {
+				return  -1;
+			}
+			break;
+		}
+
+		/*
+		 * When a directory is newly created within a watched path,
+		 * watch it recursively.
+		 * When a directory is moved in to a watched path, watch it
+		 * recursively.
+		 * Whehn a directory is moved out off a watched path,
+		 * remove the watches on it recursively; ignore.
+		 *
+		 * Self moves are handled indirectly but appropriately.
+		 */
+		if (((ievent->mask & IN_MOVED_TO) &&
+		    (ievent->mask & IN_ISDIR)) ||
+		    ((ievent->mask & IN_CREATE) &&
+		    (ievent->mask & IN_ISDIR))) {
+			reterr = fluffy_handle_addition(fluffy_handle,
+					ievent, wdinfop);
+			if (reterr) {
+				return reterr;
+			}
+		} else if ((ievent->mask & IN_MOVED_FROM) &&
+		    (ievent->mask & IN_ISDIR)) {
+			reterr = fluffy_handle_moved_from(fluffy_handle,
+					ievent, wdinfop);
+			if (reterr) {
+				return reterr;
+			}
+
+		}
+
+		/*
+		 * If a root path itself moves, remove the watches set on it
+		 * recursively. This is only for the root path self moves,
+		 * descendant path self moves are handled indirectly.
+		 */
+		if ((ievent->mask & IN_MOVE_SELF)) {
+			reterr = fluffy_is_root_path(fluffy_handle,
+					wdinfop->path);
+			if (reterr == 0) {
+				reterr = fluffy_handle_removal(
+						fluffy_handle,
+						wdinfop->path);
+				if (reterr) {
+					return reterr;
+				}
+			}
+		}
+
+		if (ievent->mask & IN_IGNORED) {
+			reterr = fluffy_handle_ignored(fluffy_handle,
+					ievent, wdinfop);
+			if (reterr) {
+				return reterr;
+			}
+		}
+
+
+	}
+	free(iebuf);
+	iebuf = NULL;
 	return  0;
 }
 
@@ -1505,8 +1840,8 @@ static int
 fluffy_setup_track()
 {
 	int ret = 0;
-	/* Lock global fluffy_track static struct */
 	int m = -1;
+	/* Lock global fluffy_track static struct */
 	m = pthread_mutex_lock(&fluffy_track.mutex);
 	if (m != 0) {
 		return -1;
@@ -1514,16 +1849,6 @@ fluffy_setup_track()
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
 	    &fluffy_track.mutex);
-
-	/*
-	 * NOTE:
-	 *
-	 * pthread_cleanup_pop() must be in the same lexical scope as that
-	 * of pthread_cleanup_push(). This means that the convenience of
-	 * returning from anywhere, regardless of block scope, is lost. Bummer.
-	 *
-	 * Employ do-while(0) to break out and reach the deferred return.
-	 */
 
 	do {
 		/* Return if fluffy_track has already been setup */
@@ -1642,10 +1967,19 @@ fluffy_ref()
 	} while(0);
 
 	pthread_cleanup_pop(1);	/* Unlock mutex */
-	return ret;
+	return ret;		/* Return fluffy handle */
 }
 
-
+/*
+ * Function:	fluffy_unref
+ *
+ * Remove the context entry and decrement the ref count
+ *
+ * args:
+ * 	- int: fluffy context handle
+ * return:
+ * 	- int: 0 when successful, error value otherwise
+ */
 static int
 fluffy_unref(int fluffy_handle)
 {
@@ -1655,6 +1989,7 @@ fluffy_unref(int fluffy_handle)
 		return -1;
 	}
 
+	/* Cannot remove something that may not exist */
 	if (fluffy_track.nref < 1) {
 		return -1;
 	}
@@ -1675,6 +2010,7 @@ fluffy_unref(int fluffy_handle)
 	    &fluffy_track.mutex);
 
 	do {
+		/* Destroy the associated mutex variable */
 		if(pthread_mutex_destroy(&ctxinfop->mutex)) {
 			/* do nothing */
 		}
@@ -1691,7 +2027,17 @@ fluffy_unref(int fluffy_handle)
 	return reterr;
 }
 
-
+/*
+ * Function:	fluffy_start_context_thread
+ *
+ * This is called from fluffy_init to start a new thread which listens to
+ * events from inotify and then handles it.
+ *
+ * args:
+ * 	- void *: fluffy handle carrying integer value
+ * return:
+ * 	- void
+ */
 static void *
 fluffy_start_context_thread(void *flhandle)
 {
@@ -1712,6 +2058,7 @@ fluffy_start_context_thread(void *flhandle)
 		pthread_exit((void *)-1);
 	}
 
+	/* Assign the context's thread ID; used for cancellations & joins */
 	ctxinfop->tid = pthread_self();
 
 	m = pthread_mutex_unlock(&ctxinfop->mutex);
@@ -1722,6 +2069,7 @@ fluffy_start_context_thread(void *flhandle)
 	pthread_cleanup_push(fluffy_destroy_context,
 	    (void *)&fluffy_handle);
 
+	/* Listen for events untill terminattion */
 	while (1) {
 		struct epoll_event *evlist = NULL;
 		evlist = calloc(NR_EPOLL_EVENTS, sizeof(struct epoll_event));
@@ -1731,6 +2079,7 @@ fluffy_start_context_thread(void *flhandle)
 		}
 
 		int nready = 0;
+		/* Listen for inotify events; blocks. */
 		nready = epoll_wait(ctxinfop->epoll_fd,
 				evlist,
 				NR_EPOLL_EVENTS,
@@ -1745,8 +2094,13 @@ fluffy_start_context_thread(void *flhandle)
 		}
 
 		int j;
+		/* Iterate through event queue and process each event */
 		for (j = 0; j < nready; j++) {
 			if (evlist[j].data.fd == ctxinfop->inotify_fd) {
+				/*
+				 * Serially processed so as to guarantee
+				 * event ordering.
+				 */
 				reterr = fluffy_process_inotify_queue(
 						fluffy_handle,
 						&evlist[j]);
@@ -1762,7 +2116,9 @@ fluffy_start_context_thread(void *flhandle)
 	return (void *)0;
 }
 
-
+/*
+ * fluffy.h contains this function description
+ */
 int
 fluffy_init(int (*user_event_fn) (const struct fluffy_event_info *eventinfo,
     void *user_data), void *user_data)
@@ -1776,7 +2132,7 @@ fluffy_init(int (*user_event_fn) (const struct fluffy_event_info *eventinfo,
 
 	int flhandle = 0;
 	/* Obtain a handle */
-	flhandle = fluffy_ref();
+	flhandle = fluffy_ref();	/* Create a reference context */
 	if (flhandle < 1) {
 		return -1;
 	}
@@ -1812,6 +2168,7 @@ fluffy_init(int (*user_event_fn) (const struct fluffy_event_info *eventinfo,
 	*flh = flhandle;
 
 	pthread_t tid;
+	/* Start the fluffy context thread */
 	reterr = pthread_create(&tid,
 			NULL,
 			fluffy_start_context_thread,
@@ -1837,7 +2194,9 @@ fluffy_init(int (*user_event_fn) (const struct fluffy_event_info *eventinfo,
 	return flhandle;
 }
 
-
+/*
+ * fluffy.h contains this function description
+ */
 int
 fluffy_wait_until_done(int fluffy_handle)
 {
@@ -1865,7 +2224,9 @@ fluffy_wait_until_done(int fluffy_handle)
 	}
 }
 
-
+/*
+ * fluffy.h contains this function description
+ */
 int
 fluffy_no_wait(int fluffy_handle)
 {
@@ -1886,7 +2247,9 @@ fluffy_no_wait(int fluffy_handle)
 	return 0;
 }
 
-
+/*
+ * fluffy.h contains this function description
+ */
 int
 fluffy_add_watch_path(int fluffy_handle, const char *pathtoadd)
 {
@@ -1900,6 +2263,9 @@ fluffy_add_watch_path(int fluffy_handle, const char *pathtoadd)
 }
 
 
+/*
+ * fluffy.h contains this function description
+ */
 int
 fluffy_remove_watch_path(int fluffy_handle, const char *pathtoremove)
 {
@@ -1909,6 +2275,9 @@ fluffy_remove_watch_path(int fluffy_handle, const char *pathtoremove)
 }
 
 
+/*
+ * fluffy.h contains this function description
+ */
 int
 fluffy_destroy(int fluffy_handle)
 {
@@ -1925,6 +2294,9 @@ fluffy_destroy(int fluffy_handle)
 }
 
 
+/*
+ * fluffy.h contains this function description
+ */
 int
 fluffy_print_event(const struct fluffy_event_info *eventinfo,
     void *user_data)
