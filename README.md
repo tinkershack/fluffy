@@ -56,9 +56,39 @@ Fluffy?
    Fluffy has three heads. It likes to flip the middle one to licensing.
 
 
+### Contents
+ - [libfluffy](#libfluffy)
+
+ - [Dependencies](#dependencies)
+
+ - [Don't mind getting your hands 
+   dirty?](#dont-mind-getting-your-hands-dirty)
+
+ - [CLI invocations](#cli-invocations)
+
+   - [fluffy usage](#fluffy-usage)
+
+   - [fluffyctl usage](#fluffyctl-usage)
+
+   - [Fluffy event log snippet](#fluffy-event-log-snippet)
+
+   - [Perform actions on events from 
+     CLI](#perform-actions-on-events-from-cli)
+
+ - [TODO: Fluffy is a WIP](#todo-fluffy-is-a-wip)
+
+
+### [libfluffy](#contents)
+
 _libfluffy_ is a better choice if you are planning to use it in 
 production. [fluffy.h][] has the interface description and callables.  
 [example.c][] provides a sample.
+
+libfluffy code is fairly documented. [fluffy.h][] would be good 
+place to start the trail. From there, jump to the corresponding function 
+definition in `fluffy.c` and follow the calls thereafter. Should you 
+feel that it's a bit confusing, head to the [example.c][] to get a sense 
+of the flow.
 
 Until the documentation is completed, these Stack Overflow answers may 
 be of some reference.
@@ -73,7 +103,22 @@ subdirectories](https://stackoverflow.com/questions/47673447/inotify-linux-watch
 folder](https://stackoverflow.com/questions/47225008/how-to-use-inotifywait-to-watch-files-within-folder-instead-of-folder/49349226#49349226)
 
 
-### Don't mind getting your hands dirty?
+### [Dependencies](#contents)
+
+ - Linux kernel > 2.6
+
+ - `gcc`
+
+ - `pkg-config`
+
+ - `make`
+
+ - `glib-2.0`
+
+ - glib-2.0 devel package (`glib2-devel` for CentOS or RPM based 
+   distros, `libglib2.0-dev` for Debian)
+
+### [Don't mind getting your hands dirty?](#contents)
 
 ```
 # Fork and clone this repo
@@ -127,7 +172,10 @@ make example
 
 ```
 
+### [CLI invocations](#contents)
+
 #### fluffy usage
+
 ```
 root@six-k:~# fluffy -h
 Usage:
@@ -196,7 +244,7 @@ Application Options:
 
 ```
 
-#### fluffy event log snippet
+#### Fluffy event log snippet
 
 ```
 MODIFY, /var/log/daemon.log
@@ -269,12 +317,11 @@ root@six-k:/home/lab/fluffy#
 ```
 
 
-### TODO: Fluffy is a WIP
+### [TODO: Fluffy is a WIP](#contents)
 
 There's still quite a few more to be done but these are the primary ones
 
  - Documentation _WIP_
- - Fluffy frontend _WIP_
  - Proper error reporting. For now, most error returns have been set -1 
    deliberately without any error string or value.
  - Valgrind

@@ -276,6 +276,11 @@ initiate_run()
 	int reterr = 0;
 	int ret = 0;
 
+	if (mq_unlink(mqfluffy) == -1) {
+		/* Just a best effort at removing stale queue */
+	}
+
+
 	epollfd = epoll_create(2);
 	if (epollfd == -1) {
 		reterr = errno;
