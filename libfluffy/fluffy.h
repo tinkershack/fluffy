@@ -40,9 +40,9 @@ struct fluffy_event_info {
 	 * is possible on a watch path, in which case, the values are ORed.
 	 *
 	 * The checks must be made like,
-	 * 	if (event_mask & FLUFFY_ACCESS)		RIGHT!
+	 * 	if (event_mask & FLUFFY_ACCESS)		// RIGHT!
 	 * rather than
-	 * 	if (event_mask == FLUFFY_ACCESS)	WRONG!
+	 * 	if (event_mask == FLUFFY_ACCESS)	// WRONG!
 	 */
 	uint32_t event_mask;
 

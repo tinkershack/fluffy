@@ -17,14 +17,6 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-
-	fh1 = fluffy_init(fluffy_print_event, (void *)&fh1);
-	if (fh1 < 1) {
-		fprintf(stderr, "fluffy_init fh1 fail\n");
-		exit(EXIT_FAILURE);
-	}
-	fprintf(stdout, "fluffy_init fh1 done\n");
-
 	ret = fluffy_set_max_user_instances("4096");
 	if (ret != 0) {
 		fprintf(stderr, "fluffy_set_max_user_instances fail\n");
@@ -43,6 +35,14 @@ main(int argc, char *argv[])
 	}
 	fprintf(stdout, "fluffy_set_max_queued_events done\n");
 
+
+	fh1 = fluffy_init(fluffy_print_event, (void *)&fh1);
+	if (fh1 < 1) {
+		fprintf(stderr, "fluffy_init fh1 fail\n");
+		exit(EXIT_FAILURE);
+	}
+	fprintf(stdout, "fluffy_init fh1 done\n");
+
 	ret = fluffy_add_watch_path(fh1, argv[1]);
 	if (ret != 0) {
 		fprintf(stderr, "fluffy_add_watch_path fh1:%s fail\n", argv[1]);
@@ -55,30 +55,13 @@ main(int argc, char *argv[])
 	}
 	fprintf(stdout, "fluffy_add_watch_path 2 done\n");
 
-	sleep(20);
-
-	ret = fluffy_reinitiate_context(fh1);
-	if (ret != 0) {
-		fprintf(stderr, "fluffy_reinitiate_context fh1 fail\n");
-	}
-	fprintf(stdout, "fluffy_reinitiate_context done\n");
-
-	sleep(20);
+	sleep(30);
 
 	ret = fluffy_reinitiate_all_contexts();
 	if (ret != 0) {
 		fprintf(stderr, "fluffy_reinitiate_all_contexts fail\n");
 	}
 	fprintf(stdout, "fluffy_reinitiate_all_contexts done\n");
-
-	/*
-	sleep(20);
-	int m = 0;
-	m = fluffy_destroy(fh1);
-	if (ret != 0) {
-		fprintf(stderr, "fluffy_destroy fh1 fail\n");
-	}
-	*/
 
 	ret = fluffy_wait_until_done(fh1);
 	if (ret != 0) {

@@ -59,6 +59,9 @@ Fluffy?
 ### Contents
  - [libfluffy](#libfluffy)
 
+   - [A simple example program using 
+     `libfluffy`](#a-simple-example-program-using-libfluffy)
+
  - [Dependencies](#dependencies)
 
  - [Don't mind getting your hands 
@@ -89,6 +92,113 @@ place to start the trail. From there, jump to the corresponding function
 definition in `fluffy.c` and follow the calls thereafter. Should you 
 feel that it's a bit confusing, head to the [example.c][] to get a sense 
 of the flow.
+
+#### API list
+
+Please look at [fluffy.h][] for description. This is just a list of 
+function calls available.
+
+__Primary functions__
+
+```
+int fluffy_init(int (*user_event_fn) (
+    const struct fluffy_event_info *eventinfo,
+    void *user_data), void *user_data);
+
+int fluffy_add_watch_path(int fluffy_handle, const char *pathtoadd);
+
+int fluffy_remove_watch_path(int fluffy_handle, const char *pathtoremove);
+
+int fluffy_wait_until_done(int fluffy_handle);
+
+int fluffy_no_wait(int fluffy_handle);
+
+int fluffy_destroy(int fluffy_handle);
+```
+
+__Helper functions__
+
+```
+int fluffy_print_event(const struct fluffy_event_info *eventinfo,
+    void *user_data);
+
+int fluffy_reinitiate_context(int fluffy_handle);
+
+int fluffy_reinitiate_all_contexts();
+
+int fluffy_set_max_queued_events(const char *max_size);
+
+int fluffy_set_max_user_instances(const char *max_size);
+
+int fluffy_set_max_user_watches(const char *max_size);
+```
+
+#### [A simple example program using `libfluffy`](#contents)
+
+```
+/*
+ * example.c
+ */
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#include <fluffy.h>
+
+int
+main(int argc, char *argv[])
+{
+	int ret = 0;
+	int flhandle = 0;       /* Fluffy handle */
+
+	if (argc < 2) {
+		fprintf(stderr, "Atleast a path required.\n");
+		exit(EXIT_FAILURE);
+	}
+
+        /* /proc/sys/fs/inotify/max_user_watches */
+	ret = fluffy_set_max_user_watches("524288");
+	if (ret != 0) {
+		fprintf(stderr, "fluffy_set_max_user_watches fail\n");
+	}
+
+        /* /proc/sys/fs/inotify/max_queued_events */
+	ret = fluffy_set_max_queued_events("524288");
+	if (ret != 0) {
+		fprintf(stderr, "fluffy_set_max_queued_events fail\n");
+	}
+
+        /* Initite fluffy and print events on the standard out */
+	flhandle = fluffy_init(fluffy_print_event, (void *)&flhandle);
+	if (flhandle < 1) {
+		fprintf(stderr, "fluffy_init fail\n");
+		exit(EXIT_FAILURE);
+	}
+
+        /* Watch argv[1] */
+	ret = fluffy_add_watch_path(flhandle, argv[1]);
+	if (ret != 0) {
+		fprintf(stderr, "fluffy_add_watch_path %s fail\n", argv[1]);
+		exit(EXIT_FAILURE);
+	}
+
+        /* Let us not exit until Fluffy exits/returns */
+	ret = fluffy_wait_until_done(flhandle);
+	if (ret != 0) {
+		fprintf(stderr, "fluffy_wait_until_done flhandle fail\n");
+		exit(EXIT_FAILURE);
+	}
+
+	exit(EXIT_SUCCESS);
+}
+
+```
+
+Save the above code block as `example.c` in `./fluffy/libfluffy/` and 
+run `make example`. Note that there's a similar example already 
+contained in that path, you may have to rename/delete that before trying 
+out this code snippet.
 
 Until the documentation is completed, these Stack Overflow answers may 
 be of some reference.
