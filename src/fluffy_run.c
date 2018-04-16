@@ -64,7 +64,6 @@ print_events(const struct fluffy_event_info *eventinfo,
 		return 0;
 	}
 
-	PRINT_STDOUT("\n", "");
 	if (eventinfo->event_mask & FLUFFY_ACCESS &&
 	    print_events_mask & FLUFFY_ACCESS)
 		PRINT_STDOUT("ACCESS,", "");
@@ -121,7 +120,7 @@ print_events(const struct fluffy_event_info *eventinfo,
 	    print_events_mask & FLUFFY_Q_OVERFLOW)
 		PRINT_STDOUT("Q_OVERFLOW,", "");
 	PRINT_STDOUT("\t", "");
-	PRINT_STDOUT("%s", eventinfo->path ? eventinfo->path : "", "");
+	PRINT_STDOUT("%s\n", eventinfo->path ? eventinfo->path : "", "");
 
 	/*
 	if (eventinfo->event_mask & FLUFFY_WATCH_EMPTY) {

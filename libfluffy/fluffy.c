@@ -2301,8 +2301,6 @@ int
 fluffy_print_event(const struct fluffy_event_info *eventinfo,
     void *user_data)
 {
-	fprintf(stdout, "\n");
-	fprintf(stdout, "event:\t");
 	if (eventinfo->event_mask & FLUFFY_ACCESS)
 		fprintf(stdout, "ACCESS, ");
 	if (eventinfo->event_mask & FLUFFY_ATTRIB)
@@ -2339,8 +2337,8 @@ fluffy_print_event(const struct fluffy_event_info *eventinfo,
 		fprintf(stdout, "ROOT_IGNORED, ");
 	if (eventinfo->event_mask & FLUFFY_WATCH_EMPTY)
 		fprintf(stdout, "WATCH_EMPTY, ");
-	fprintf(stdout, "\n");
-	fprintf(stdout, "path:\t%s\n", eventinfo->path ? eventinfo->path : "");
+	fprintf(stdout, "\t");
+	fprintf(stdout, "%s\n", eventinfo->path ? eventinfo->path : "");
 
 	if (eventinfo->event_mask & FLUFFY_WATCH_EMPTY) {
 		int m = 0;

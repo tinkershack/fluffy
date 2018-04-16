@@ -1,8 +1,8 @@
-In the spirit of true freedom, Fluffy is [Unlicensed][]. Free as in 
-*do what ever pleases you* sort of freedom and free beer as well! Fluffy 
+In the spirit of true freedom, Fluffy is [Unlicensed][]. Free as in *do 
+what ever pleases you* sort of freedom and free beer as well! Fluffy 
 believes that a piece of software is free(freedom?) only when it has 
-severed ties with licenses, copyrights, intellectual property rights 
-and other crap of similar kind. Attribution is a kind gesture, Fluffy 
+severed ties with licenses, copyrights, intellectual property rights and 
+other crap of similar kind. Attribution is a kind gesture, Fluffy 
 appreciates it but doesn't fret if you fail to say "[good dog][]!"
 
 
@@ -87,8 +87,8 @@ _libfluffy_ is a better choice if you are planning to use it in
 production. [fluffy.h][] has the interface description and callables.  
 [example.c][] provides a sample.
 
-libfluffy code is fairly documented. [fluffy.h][] would be good 
-place to start the trail. From there, jump to the corresponding function 
+libfluffy code is fairly documented. [fluffy.h][] would be good place to 
+start the trail. From there, jump to the corresponding function 
 definition in `fluffy.c` and follow the calls thereafter. Should you 
 feel that it's a bit confusing, head to the [example.c][] to get a sense 
 of the flow.
@@ -151,6 +151,7 @@ main(int argc, char *argv[])
 {
 	int ret = 0;
 	int flhandle = 0;       /* Fluffy handle */
+	int rc = EXIT_SUCCESS;	/* Return code */
 
 	if (argc < 2) {
 		fprintf(stderr, "Atleast a path required.\n");
@@ -169,36 +170,48 @@ main(int argc, char *argv[])
 		fprintf(stderr, "fluffy_set_max_queued_events fail\n");
 	}
 
-        /* Initite fluffy and print events on the standard out */
+        /*
+	 * Initiate fluffy and print events on the standard out with the help
+	 * of libfluffy's print event helper function.
+	 *
+	 * Look at fluffy.h for help with plugfing your custom event handler
+	 */
 	flhandle = fluffy_init(fluffy_print_event, (void *)&flhandle);
 	if (flhandle < 1) {
 		fprintf(stderr, "fluffy_init fail\n");
 		exit(EXIT_FAILURE);
 	}
 
-        /* Watch argv[1] */
-	ret = fluffy_add_watch_path(flhandle, argv[1]);
-	if (ret != 0) {
-		fprintf(stderr, "fluffy_add_watch_path %s fail\n", argv[1]);
-		exit(EXIT_FAILURE);
+	do {
+		/* Watch argv[1] */
+		ret = fluffy_add_watch_path(flhandle, argv[1]);
+		if (ret != 0) {
+			fprintf(stderr, "fluffy_add_watch_path %s fail\n", argv[1]);
+			rc = EXIT_FAILURE;
+			break;
+		}
+
+		/* Let us not exit until Fluffy exits/returns */
+		ret = fluffy_wait_until_done(flhandle);
+		if (ret != 0) {
+			fprintf(stderr, "fluffy_wait_until_done fail\n");
+			rc = EXIT_FAILURE;
+			break;
+		}
+	} while(0);
+
+	if (rc != EXIT_SUCCESS) {
+		ret = fluffy_destroy(flhandle);	/* Destroy Fluffy context */
 	}
 
-        /* Let us not exit until Fluffy exits/returns */
-	ret = fluffy_wait_until_done(flhandle);
-	if (ret != 0) {
-		fprintf(stderr, "fluffy_wait_until_done flhandle fail\n");
-		exit(EXIT_FAILURE);
-	}
-
-	exit(EXIT_SUCCESS);
+	exit(rc);
 }
 
 ```
 
-Save the above code block as `example.c` in `./fluffy/libfluffy/` and 
-run `make example`. Note that there's a similar example already 
-contained in that path, you may have to rename/delete that before trying 
-out this code snippet.
+The above code block is available as `example.c` in 
+`./fluffy/libfluffy/`, run `make example` from within the libfluffy 
+directory to compile the example program.
 
 Until the documentation is completed, these Stack Overflow answers may 
 be of some reference.
