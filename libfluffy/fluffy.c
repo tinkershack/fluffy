@@ -253,23 +253,23 @@ fluffy_set_max_queued_events(const char *maxvalp)
 	ssize_t wrbytes;
 
 	if (maxvalp == NULL) {
-		return -1;
+		return FLUFFY_ERROR_INVALID_ARG;
 	}
 
 	fd = open("/proc/sys/fs/inotify/max_queued_events",
 		O_WRONLY | O_TRUNC | O_CLOEXEC);
 	if (fd == -1) {
-		return -1;
+		return FLUFFY_ERROR_OPEN_QUEUE_FAILED;
 	}
 
 	wrbytes = write(fd, maxvalp, strlen(maxvalp));
 	if(wrbytes == -1 || (size_t)wrbytes != strlen(maxvalp)) {
 		close(fd);
-		return -1;
+		return FLUFFY_ERROR_WRITE_QUEUE_FAILED;
 	}
 
 	if (close(fd) != 0) {
-		return -1;
+		return FLUFFY_ERROR_CLOSE_QUEUE_FAILED;
 	}
 
 	/* Reinitialize all fluffy context to pick up the newly set value */
@@ -292,23 +292,23 @@ fluffy_set_max_user_instances(const char *maxvalp)
 	ssize_t wrbytes;
 
 	if (maxvalp == NULL) {
-		return -1;
+		return FLUFFY_ERROR_INVALID_ARG;
 	}
 
 	fd = open("/proc/sys/fs/inotify/max_user_instances",
 		O_WRONLY | O_TRUNC | O_CLOEXEC);
 	if (fd == -1) {
-		return -1;
+		return FLUFFY_ERROR_OPEN_QUEUE_FAILED;
 	}
 
 	wrbytes = write(fd, maxvalp, strlen(maxvalp));
 	if(wrbytes == -1 || (size_t)wrbytes != strlen(maxvalp)) {
 		close(fd);
-		return -1;
+		return FLUFFY_ERROR_WRITE_QUEUE_FAILED;
 	}
 
 	if (close(fd) != 0) {
-		return -1;
+		return FLUFFY_ERROR_CLOSE_QUEUE_FAILED;
 	}
 
 	return 0;
@@ -324,23 +324,23 @@ fluffy_set_max_user_watches(const char *maxvalp)
 	ssize_t wrbytes;
 
 	if (maxvalp == NULL) {
-		return -1;
+		return FLUFFY_ERROR_INVALID_ARG;
 	}
 
 	fd = open("/proc/sys/fs/inotify/max_user_watches",
 		O_WRONLY | O_TRUNC | O_CLOEXEC);
 	if (fd == -1) {
-		return -1;
+		return FLUFFY_ERROR_OPEN_QUEUE_FAILED;
 	}
 
 	wrbytes = write(fd, maxvalp, strlen(maxvalp));
 	if(wrbytes == -1 || (size_t)wrbytes != strlen(maxvalp)) {
 		close(fd);
-		return -1;
+		return FLUFFY_ERROR_WRITE_QUEUE_FAILED;
 	}
 
 	if (close(fd) != 0) {
-		return -1;
+		return FLUFFY_ERROR_CLOSE_QUEUE_FAILED;
 	}
 
 	return 0;
@@ -353,7 +353,7 @@ fluffy_wd_info_new()
 	struct fluffy_wd_info *wdinfop;
 	wdinfop = calloc(1, sizeof(struct fluffy_wd_info));
 	if (wdinfop == NULL) {
-		perror("calloc");
+		perror("calloc in fluffy_wd_info_new(), FILE: fluffly.c");
 		return NULL;
 	}
 	wdinfop->wd	= 0;
@@ -379,7 +379,7 @@ fluffy_context_info_new()
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = calloc(1, sizeof(struct fluffy_context_info));
 	if (ctxinfop == NULL) {
-		perror("calloc");
+		perror("calloc in fluffy_context_info_new(), FILE: fluffly.c");
 		/*
 		 * When OOM is not handled, it's a common practice to call
 		 * exit() to bail out. We will return NULL instead of exit()
@@ -389,6 +389,7 @@ fluffy_context_info_new()
 	}
 
 	if (pthread_mutex_init(&ctxinfop->mutex, NULL)) {
+		free(ctxinfop);
 		return NULL;
 	}
 
@@ -455,7 +456,7 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 	if (ctxinfop->user_event_fn == NULL) {
 		return 0;
@@ -480,7 +481,7 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 				ie->len,
 				ie->name);
 		if (eventpathp == NULL) {
-			return -1;
+			return FLUFFY_ERROR_NO_MEMORY; // form_event_path will only fail for this reason. 18/06/19
 		}
 
 		/*
@@ -530,7 +531,9 @@ fluffy_handoff_event(int fluffy_handle, struct inotify_event *ie,
 	struct fluffy_event_info *evtinfop;
 	evtinfop = calloc(1, sizeof(struct fluffy_event_info));
 	if (evtinfop == NULL) {
-		pthread_exit((void *)-1);
+		free(eventpathp);
+		pthread_exit((void *)FLUFFY_ERROR_NO_MEMORY);
+		// TODO: previous FLUFFY_ERROR_NO_MEMORY just return error code.
 	}
 	evtinfop->event_mask = handoff_mask;
 	evtinfop->path = eventpathp;
@@ -568,7 +571,7 @@ dir_tree_add_watch(const char *pathname, const struct stat *sbuf, int type,
 	struct fluffy_context_info *ctxinfop = NULL;
 	ctxinfop = fluffy_get_context_info(fluffy_track.curr_ctxinfop->handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	int reterr = 0;
@@ -576,7 +579,7 @@ dir_tree_add_watch(const char *pathname, const struct stat *sbuf, int type,
 	int m = -1;
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -607,8 +610,8 @@ dir_tree_add_watch(const char *pathname, const struct stat *sbuf, int type,
 		iwd = inotify_add_watch(ctxinfop->inotify_fd, pathname,
 				INOTIFY_EVENT_FLAGS);
 		if (iwd == -1) {
-			perror("inotify_add_watch");
-			reterr = -1;
+			perror("inotify_add_watch in dir_tree_add_watch(), FILE: fluffly.c");
+			reterr = FLUFFY_ERROR_INOTIFY_ADD_WATCH;
 			break;
 		}
 
@@ -642,7 +645,7 @@ dir_tree_add_watch(const char *pathname, const struct stat *sbuf, int type,
 		struct fluffy_wd_info *wdinfop;
 		wdinfop = fluffy_wd_info_new();
 		if (wdinfop == NULL) {
-			reterr = -1;
+			reterr = FLUFFY_ERROR_NO_MEMORY; // fluffy_wd_info_new will only fail for this reason. 18/06/19
 			break;
 		}
 
@@ -650,8 +653,8 @@ dir_tree_add_watch(const char *pathname, const struct stat *sbuf, int type,
 		wdinfop->mask = INOTIFY_EVENT_FLAGS;
 		wdinfop->path = strdup(pathname);
 		if (wdinfop->path == NULL) {
-			perror("strdup");
-			reterr = -1;
+			perror("strdup in dir_tree_add_watch(), FILE fluffy.c");
+			reterr = FLUFFY_ERROR_NO_MEMORY;
 			break;
 		}
 
@@ -666,7 +669,7 @@ dir_tree_add_watch(const char *pathname, const struct stat *sbuf, int type,
 
 	pthread_cleanup_pop(1);		/* Unlock mutex */
 
-	if (reterr) {
+	if (reterr) { // TODO: make sure FTW_CONTINUE does not collide with error code. (neold2022)
 		return reterr;
 	} else {
 		return FTW_CONTINUE;
@@ -679,13 +682,13 @@ watch_each_root_path_g(gpointer root_path, gpointer value,
     gpointer fluffy_handle)
 {
 	if (root_path == NULL) {
-		pthread_exit((void *)-1);
+		pthread_exit((void *)FLUFFY_ERROR_INVALID_ARG); // TODO: Is it correct here? (neold2022)
 	}
 
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(GPOINTER_TO_INT(fluffy_handle));
 	if (ctxinfop == NULL) {
-		pthread_exit((void *)-1);
+		pthread_exit((void *)FLUFFY_ERROR_CTXINFOP);
 	}
 
 	int reterr = 0;
@@ -694,7 +697,7 @@ watch_each_root_path_g(gpointer root_path, gpointer value,
 			0,
 			0);
 	if (reterr) {
-		pthread_exit((void *)-1);
+		pthread_exit((void *)((size_t)reterr)); // remove warning
 	}
 }
 
@@ -731,8 +734,8 @@ search_tree_g(gpointer pathname, gpointer compare_path)
 	size_t cmp_size = 0;
 	tocmp = calloc(1, strlen(cmp_for_each_path) + 2);
 	if (tocmp == NULL) {
-		perror("calloc");
-		pthread_exit((void *)-1);
+		perror("calloc in search_tree_g(), FILE: fluffy.c");
+		pthread_exit((void *)FLUFFY_ERROR_NO_MEMORY);
 	}
 
 	/*
@@ -781,7 +784,7 @@ form_event_path(char *wdpath, uint32_t ilen, char *iname)
 	currpath = calloc(1, (size_t) (strlen(wdpath) + 1 
 				+ ((ilen) ?  ilen : 0) + 2));
 	if (currpath == NULL) {
-		perror("calloc");
+		perror("calloc failed in form_event_path(), FILE: fluffy.c");
 		return NULL;
 	}
 
@@ -823,8 +826,8 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 	if (is_real_path_check) {
 		addpath = realpath(pathtoadd, NULL);
 		if (addpath == NULL) {
-			reterr = errno;
-			perror("realpath");
+			reterr = FLUFFY_ERROR_REAL_PATH_RESOLVE;
+			perror("realpath in fluffy_add_watch(), FILE: fluffy.c");
 			return reterr;
 		}
 	} else {
@@ -834,8 +837,8 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 		 */
 		addpath = strdup(pathtoadd);
 		if (addpath == NULL) {
-			reterr = errno;
-			perror("strdup");
+			reterr = FLUFFY_ERROR_NO_MEMORY;
+			perror("strdup in fluffy_add_watch(), FILE: fluffy.c");
 			return reterr;
 		}
 	}
@@ -843,13 +846,15 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		free(addpath);
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	int m = -1;
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		free(addpath);
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -874,7 +879,8 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 
 	m = pthread_mutex_lock(&fluffy_track.mutex);
 	if (m != 0) {
-		return -1;
+		free(addpath);
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -885,8 +891,8 @@ fluffy_add_watch(int fluffy_handle, const char *pathtoadd,
 
 		/* Watch the path recursively */
 		if (nftw(addpath, dir_tree_add_watch, 30, FTW_FLAGS) == -1) {
-			reterr = errno;
-			perror("nftw");
+			reterr = FLUFFY_ERROR_NFTW_WALKING;
+			perror("nftw in fluffy_add_watch(), FILE: fluffy.c");
 			break;
 		}
 	} while(0);
@@ -912,14 +918,14 @@ fluffy_cleanup_context_info_records(int fluffy_handle)
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	int m = -1;
 	int reterr = 0;
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
 	    &ctxinfop->mutex);
@@ -927,8 +933,8 @@ fluffy_cleanup_context_info_records(int fluffy_handle)
 	do {
 		/* Close inotify. This will be reinitiated if required */
 		if (close(ctxinfop->inotify_fd) == -1) {
-			reterr = errno;
-			perror("close");
+			reterr = FLUFFY_ERROR_CLOSE_INOTIFY_FD;
+			perror("close in fluffy_cleanup_context_info_records(), FILE: fluffy.c");
 			break;
 		}
 		ctxinfop->nwd = 0;
@@ -964,13 +970,13 @@ fluffy_setup_context_info_records(int fluffy_handle)
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	int m = -1;
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -993,7 +999,7 @@ fluffy_setup_context_info_records(int fluffy_handle)
 					NULL,
 					(GDestroyNotify)free_wd_table_info_g);
 		if (ctxinfop->wd_table == NULL) {
-			ret = 1;
+			ret = FLUFFY_ERROR_G_HASH_TABLE;
 			break;
 		}
 
@@ -1003,7 +1009,7 @@ fluffy_setup_context_info_records(int fluffy_handle)
 					(GDestroyNotify)free,
 					NULL);
 		if (ctxinfop->path_table == NULL) {
-			ret = 1;
+			ret = FLUFFY_ERROR_G_HASH_TABLE;
 			break;
 		}
 
@@ -1013,7 +1019,7 @@ fluffy_setup_context_info_records(int fluffy_handle)
 						(GDestroyNotify)free,
 						NULL);
 		if (ctxinfop->root_path_table == NULL) {
-			ret = 1;
+			ret = FLUFFY_ERROR_G_HASH_TABLE;
 			break;
 		}
 
@@ -1023,7 +1029,7 @@ fluffy_setup_context_info_records(int fluffy_handle)
 					(GDestroyNotify)free,
 					NULL);
 		if (ctxinfop->path_tree == NULL) {
-			ret = 1;
+			ret = FLUFFY_ERROR_G_TREE;
 			break;
 		}
 	} while(0);
@@ -1053,13 +1059,13 @@ fluffy_initiate_inotify(int fluffy_handle)
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	int m = -1;
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -1069,7 +1075,7 @@ fluffy_initiate_inotify(int fluffy_handle)
 		/* Initialize inotify, get its descriptor */
 		ctxinfop->inotify_fd = inotify_init1(IN_CLOEXEC);
 		if (ctxinfop->inotify_fd == -1) {
-			ret = errno;
+			ret = FLUFFY_ERROR_INIT_INOTIFY_FD;
 			break;
 		}
 
@@ -1082,7 +1088,7 @@ fluffy_initiate_inotify(int fluffy_handle)
 		    EPOLL_CTL_ADD,
 		    ctxinfop->inotify_fd,
 		    &evtmp) == -1) {
-			ret = errno;
+			ret = FLUFFY_ERROR_EPOLL_CTL;
 			break;
 		}
 	} while (0);
@@ -1128,7 +1134,7 @@ fluffy_destroy_context(void *flhandle)
 		    &ctxinfop->mutex);
 
 		if (close(ctxinfop->epoll_fd) == -1) {
-			perror("close");
+			perror("close in fluffy_destroy_context(), FILE: fluffy.c");
 			/* best effort */
 		}
 
@@ -1155,7 +1161,7 @@ int
 fluffy_reinitiate_all_contexts()
 {
 	if (fluffy_is_track_setup()) {
-		return -1;
+		return FLUFFY_ERROR_TRACK_NOT_INIT;
 	}
 
 	if(g_hash_table_size(fluffy_track.context_table) > 0) {
@@ -1184,13 +1190,13 @@ fluffy_reinitiate_context(int fluffy_handle)
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	/* Cleanup the context records and close the inotify instance */
 	reterr = fluffy_cleanup_context_info_records(fluffy_handle);
 	if (reterr) {
-		return reterr;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	/* Acquire a fresh queue */
@@ -1225,13 +1231,13 @@ fluffy_initiate_epoll(int fluffy_handle)
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	int m = -1;
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -1239,7 +1245,7 @@ fluffy_initiate_epoll(int fluffy_handle)
 
 	ctxinfop->epoll_fd = epoll_create(3);
 	if (ctxinfop->epoll_fd == -1) {
-		ret = errno;
+		ret = FLUFFY_ERROR_EPOLL_CREATE;
 	}
 
 	pthread_cleanup_pop(1);		/* Unlock mutex */
@@ -1299,14 +1305,14 @@ fluffy_is_root_path(int fluffy_handle, char *path)
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	int m = -1;
 	int reterr = 0;
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -1314,7 +1320,7 @@ fluffy_is_root_path(int fluffy_handle, char *path)
 
 	do {
 		if (!g_hash_table_contains(ctxinfop->root_path_table, path)) {
-			reterr = 1;
+			reterr = FLUFFY_ERROR_GENERIC; // TODO: internal error?
 			break;
 		}
 	} while(0);
@@ -1376,7 +1382,7 @@ fluffy_handle_addition(int fluffy_handle, struct inotify_event *ievent,
 			ievent->len,
 			ievent->name);
 	if (currpath == NULL) {
-		return -1;
+		return FLUFFY_ERROR_NO_MEMORY; // form_event_path will only fail for this reason. 18/06/19
 	}
 
 	/* Since this path is already in our records, it's a real path */
@@ -1416,11 +1422,15 @@ fluffy_handle_ignored(int fluffy_handle, struct inotify_event *ievent,
 
 	char *tp;
 	tp = strdup(wdinfop->path);
+	if (tp == NULL) {
+		return FLUFFY_ERROR_NO_MEMORY;
+	}
 
 	int m = -1;
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		free(tp);
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -1466,7 +1476,7 @@ fluffy_handle_moved_from(int fluffy_handle, struct inotify_event *ievent,
 	movepath = form_event_path(wdinfop->path,
 				ievent->len, ievent->name);
 	if (movepath == NULL) {
-		return -1;
+		return FLUFFY_ERROR_NO_MEMORY; // form_event_path will only fail for this reason. 18/06/19
 	}
 
 	reterr = fluffy_handle_removal(fluffy_handle, movepath);
@@ -1497,7 +1507,7 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	int reterr = 0;
@@ -1507,7 +1517,7 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 	int m = -1;
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -1536,7 +1546,7 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 			PRINT_STDERR("Could not lookup path %s\n", \
 			    cmp_for_each_path);
 			cmp_for_each_path = NULL;
-			reterr = -1;
+			reterr = FLUFFY_ERROR_G_HASHTABLE_LOOKUP;
 			break;
 		}
 
@@ -1551,8 +1561,8 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 		/* Remove inotify watch on /hogwarts/dungeons */
 		iwdtmp = inotify_rm_watch(ctxinfop->inotify_fd, toremwd->wd);
 		if (iwdtmp == -1) {
-			reterr = errno;
-			perror("inotify_rm_watch");
+			reterr = FLUFFY_ERROR_RM_INOTIFY_WATCH;
+			perror("inotify_rm_watch(1) in fluffy_handle_removal(), FILE: fluffy.c");
 			cmp_for_each_path = NULL;
 			break;
 		}
@@ -1579,8 +1589,8 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 			iwd = inotify_rm_watch(ctxinfop->inotify_fd,
 					GPOINTER_TO_INT(wdtp));
 			if (iwd == -1) {
-				reterr = errno;
-				perror("inotify_rm_watch");
+				reterr = FLUFFY_ERROR_RM_INOTIFY_WATCH;
+				perror("inotify_rm_watch(2) in fluffy_handle_removal(), FILE: fluffy.c");
 				cmp_for_each_path = NULL;
 				break;
 			}
@@ -1592,7 +1602,7 @@ fluffy_handle_removal(int fluffy_handle, char *removethis)
 				PRINT_STDERR("Could not lookup wd %d\n", \
 						GPOINTER_TO_INT(wdtp));
 				cmp_for_each_path = NULL;
-				reterr = -1;
+				reterr = FLUFFY_ERROR_G_HASHTABLE_LOOKUP;
 				break;
 			}
 			/* Remove fluffy records of the returned entry */
@@ -1636,17 +1646,17 @@ static int
 fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 {
 	ssize_t nrbytes;
-	int reterr = 0;
+	int reterr = 0, qoverflow;
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 
 	if (evlist->data.fd != ctxinfop->inotify_fd) {
 		PRINT_STDERR("Incorrect file descriptor\n", "");
-		return 1;
+		return FLUFFY_ERROR_INVALID_ARG; // TODO: Is it correct here? (neold2022)
 	}
 
 	if ((evlist->events & EPOLLERR) || (evlist->events & EPOLLHUP)) {
@@ -1666,8 +1676,8 @@ fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 	iebuf = calloc(NR_INOTIFY_EVENTS,
 			sizeof(struct inotify_event) + NAME_MAX + 1);
 	if (iebuf == NULL) {
-		reterr = errno;
-		perror("calloc");
+		reterr = FLUFFY_ERROR_NO_MEMORY;
+		perror("calloc in fluffy_process_inotify_queue(), FILE: fluffy.c");
 		return  reterr;
 	}
 
@@ -1677,12 +1687,14 @@ fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 			(sizeof(struct inotify_event) +
 			 NAME_MAX + 1));
 	if (nrbytes == -1) {
-		reterr = errno;
-		perror("read");
+		reterr = FLUFFY_ERROR_READ_INOTIFY_FD;
+		perror("read in fluffy_process_inotify_queue(), FILE: fluffy.c");
+		free(iebuf);
 		return  reterr;
 	}
 	if (nrbytes == 0) {
-		return -1;
+		free(iebuf);
+		return FLUFFY_ERROR_READ_INOTIFY_FD; // No event? (neold2022)
 	}
 
 	/*
@@ -1718,9 +1730,10 @@ fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 		 * fluffy_handoff_event will take care of it. Do not have to
 		 * worry about wdinfop being NULL.
 		 */
-		if(fluffy_handoff_event(fluffy_handle,
-		    ievent, wdinfop) != 0) {
-			return -1; /* A non-zero return terminates context */
+		if((reterr = fluffy_handoff_event(fluffy_handle,
+		    ievent, wdinfop)) != 0) {
+		    	free(iebuf);
+			return reterr; /* A non-zero return terminates context */
 		}
 
 		/*
@@ -1732,9 +1745,11 @@ fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 		if (ievent->mask & IN_Q_OVERFLOW) {
 			PRINT_STDERR("Queue overflow, " \
 				"reinitiating all watches!\n", "");
-			if (fluffy_handle_qoverflow(fluffy_handle)) {
-				return  -1;
+			if ((qoverflow = fluffy_handle_qoverflow(fluffy_handle)) != 0) {
+				free(iebuf);
+				return qoverflow;
 			}
+			// TODO: set reterr? (neold2022)
 			break;
 		}
 
@@ -1755,6 +1770,7 @@ fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 			reterr = fluffy_handle_addition(fluffy_handle,
 					ievent, wdinfop);
 			if (reterr) {
+				free(iebuf);
 				return reterr;
 			}
 		} else if ((ievent->mask & IN_MOVED_FROM) &&
@@ -1762,6 +1778,7 @@ fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 			reterr = fluffy_handle_moved_from(fluffy_handle,
 					ievent, wdinfop);
 			if (reterr) {
+				free(iebuf);
 				return reterr;
 			}
 
@@ -1780,6 +1797,7 @@ fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 						fluffy_handle,
 						wdinfop->path);
 				if (reterr) {
+					free(iebuf);
 					return reterr;
 				}
 			}
@@ -1789,6 +1807,7 @@ fluffy_process_inotify_queue(int fluffy_handle, struct epoll_event *evlist)
 			reterr = fluffy_handle_ignored(fluffy_handle,
 					ievent, wdinfop);
 			if (reterr) {
+				free(iebuf);
 				return reterr;
 			}
 		}
@@ -1844,7 +1863,7 @@ fluffy_setup_track()
 	/* Lock global fluffy_track static struct */
 	m = pthread_mutex_lock(&fluffy_track.mutex);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -1868,7 +1887,7 @@ fluffy_setup_track()
 						(GDestroyNotify)
 						free_context_table_info_g);
 		if (fluffy_track.context_table == NULL) {
-			ret = -1;
+			ret = FLUFFY_ERROR_G_HASH_TABLE;
 			break;
 		}
 
@@ -1934,12 +1953,12 @@ fluffy_ref()
 	int m = -1;
 
 	if (fluffy_is_track_setup()) {
-		return -1;
+		return -FLUFFY_ERROR_TRACK_NOT_INIT;
 	}
 
 	m = pthread_mutex_lock(&fluffy_track.mutex);
 	if (m != 0) {
-		return -1;
+		return -FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -1986,24 +2005,24 @@ fluffy_unref(int fluffy_handle)
 	int reterr = 0;
 
 	if (fluffy_is_track_setup()) {
-		return -1;
+		return FLUFFY_ERROR_TRACK_NOT_INIT;
 	}
 
 	/* Cannot remove something that may not exist */
 	if (fluffy_track.nref < 1) {
-		return -1;
+		return FLUFFY_ERROR_TRACK_EMPTY;
 	}
 
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	int m = -1;
 	m = pthread_mutex_lock(&fluffy_track.mutex);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	pthread_cleanup_push(fluffy_thread_cleanup_unlock,
@@ -2016,7 +2035,7 @@ fluffy_unref(int fluffy_handle)
 		}
 		if (!g_hash_table_remove(fluffy_track.context_table,
 		    GINT_TO_POINTER(fluffy_handle))) {
-			reterr = -1;
+			reterr = FLUFFY_ERROR_INVALID_ARG; // TODO: Is it correct here? (neold2022)
 			break;
 		}
 
@@ -2050,12 +2069,12 @@ fluffy_start_context_thread(void *flhandle)
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		pthread_exit((void *)-1);
+		pthread_exit((void *)FLUFFY_ERROR_CTXINFOP);
 	}
 
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		pthread_exit((void *)-1);
+		pthread_exit((void *)FLUFFY_ERROR_MUTEX_LOCK_FAILED);
 	}
 
 	/* Assign the context's thread ID; used for cancellations & joins */
@@ -2063,7 +2082,7 @@ fluffy_start_context_thread(void *flhandle)
 
 	m = pthread_mutex_unlock(&ctxinfop->mutex);
 	if (m != 0) {
-		pthread_exit((void *)-1);
+		pthread_exit((void *)FLUFFY_ERROR_MUTEX_UNLOCK_FAILED);
 	}
 
 	pthread_cleanup_push(fluffy_destroy_context,
@@ -2074,8 +2093,8 @@ fluffy_start_context_thread(void *flhandle)
 		struct epoll_event *evlist = NULL;
 		evlist = calloc(NR_EPOLL_EVENTS, sizeof(struct epoll_event));
 		if (evlist == NULL) {
-			perror("calloc");
-			pthread_exit((void *)-1);
+			perror("calloc in fluffy_start_context_thread(), FILE: fluffy.c");
+			pthread_exit((void *)FLUFFY_ERROR_NO_MEMORY);
 		}
 
 		int nready = 0;
@@ -2088,8 +2107,8 @@ fluffy_start_context_thread(void *flhandle)
 			if (errno == -1) {
 				continue;
 			} else {
-				perror("epoll_wait");
-				pthread_exit((void *)-1);
+				perror("epoll_wait in fluffy_start_context_thread(), FILE: fluffy.c");
+				pthread_exit((void *)FLUFFY_ERROR_EPOLL_WAIT);
 			}
 		}
 
@@ -2105,7 +2124,7 @@ fluffy_start_context_thread(void *flhandle)
 						fluffy_handle,
 						&evlist[j]);
 				if (reterr) {
-					pthread_exit((void *)-1);
+					pthread_exit((void *)((size_t)reterr));
 				}
 			}
 		}
@@ -2127,26 +2146,26 @@ fluffy_init(int (*user_event_fn) (const struct fluffy_event_info *eventinfo,
 	int reterr = 0;
 
 	if (fluffy_setup_track()) {
-		return -1;
+		return FLUFFY_ERROR_TRACK_NOT_INIT;
 	}
 
 	int flhandle = 0;
 	/* Obtain a handle */
 	flhandle = fluffy_ref();	/* Create a reference context */
 	if (flhandle < 1) {
-		return -1;
+		return flhandle;
 	}
 
 	/* Get the fluffy_context_info of this handle */
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(flhandle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return -FLUFFY_ERROR_CTXINFOP;
 	}
 
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return -FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	/* Assign the user provided function pointer */
@@ -2155,12 +2174,12 @@ fluffy_init(int (*user_event_fn) (const struct fluffy_event_info *eventinfo,
 
 	m = pthread_mutex_unlock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return -FLUFFY_ERROR_MUTEX_UNLOCK_FAILED;
 	}
 
 	reterr = fluffy_setup_context(flhandle);
 	if (reterr) {
-		return -1;
+		return -reterr; // fluffy_setup_context returns a positive error code.
 	}
 
 	/* Freed by fluffy_destroy_context */
@@ -2176,19 +2195,19 @@ fluffy_init(int (*user_event_fn) (const struct fluffy_event_info *eventinfo,
 	if (reterr) {
 		fluffy_destroy_context((void *)flh);
 		free(flh);
-		return -1;
+		return -FLUFFY_ERROR_THREAD_CREATE;
 	}
 
 	m = pthread_mutex_lock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return -FLUFFY_ERROR_MUTEX_LOCK_FAILED;
 	}
 
 	ctxinfop->tid = tid;
 
 	m = pthread_mutex_unlock(&ctxinfop->mutex);
 	if (m != 0) {
-		return -1;
+		return -FLUFFY_ERROR_MUTEX_UNLOCK_FAILED;
 	}
 
 	return flhandle;
@@ -2206,13 +2225,13 @@ fluffy_wait_until_done(int fluffy_handle)
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	/* Block until the context thread terminates */
 	m = pthread_join(ctxinfop->tid, &ret);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_THREAD_JOIN;
 	}
 
 	if (ret == PTHREAD_CANCELED) {		/* Deliberate cancell */
@@ -2220,7 +2239,7 @@ fluffy_wait_until_done(int fluffy_handle)
 	} else if ((long)ret == 0) {
 		return 0;
 	} else {
-		return -1;
+		return (long)ret;
 	}
 }
 
@@ -2235,13 +2254,13 @@ fluffy_no_wait(int fluffy_handle)
 	struct fluffy_context_info *ctxinfop;
 	ctxinfop = fluffy_get_context_info(fluffy_handle);
 	if (ctxinfop == NULL) {
-		return -1;
+		return FLUFFY_ERROR_CTXINFOP;
 	}
 
 	/* Deatch the context thread, can't be joined anymore  */
 	m = pthread_detach(ctxinfop->tid);
 	if (m != 0) {
-		return -1;
+		return FLUFFY_ERROR_THREAD_DETACH;
 	}
 
 	return 0;
@@ -2287,7 +2306,7 @@ fluffy_destroy(int fluffy_handle)
 		return -1;
 	}
 
-	int reterr = -1;
+	int reterr = FLUFFY_ERROR_CTXINFOP;
 	reterr = pthread_cancel(ctxinfop->tid);
 	
 	return reterr;
