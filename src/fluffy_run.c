@@ -400,10 +400,14 @@ main(int argc, char *argv[])
 	gchar *print_err = NULL;
 	GOptionEntry entries_g[]= {
 		{ "outfile", 'O', 0, G_OPTION_ARG_FILENAME, &print_out,
-			"File to print output [default:stdout]",
+			"File to print output [default:stdout] " \
+			"Ensure that it's NOT located within the watch path "\
+			"to prevent a recurring feedback loop!",
 			"./out.fluffy" },
 		{ "errfile", 'E', 0, G_OPTION_ARG_FILENAME, &print_err,
-			"File to print errors [default:stderr]",
+			"File to print errors [default:stderr] " \
+			"Ensure that it's NOT located within the watch path "\
+			"to prevent a recurring feedback loop!",
 			"./err.fluffy" },
 		{ NULL }
 	};
@@ -411,37 +415,37 @@ main(int argc, char *argv[])
 	int reterr = 0;
 	out_file = stdout;
 	err_file = stderr;
-        GOptionContext *argctx;
-        GError *error_g = NULL;
+	GOptionContext *argctx;
+	GError *error_g = NULL;
 
-        argctx = g_option_context_new(option_context);
-        g_option_context_add_main_entries(argctx, entries_g, NULL);
-        g_option_context_set_description(argctx, context_description);
-        if (!g_option_context_parse(argctx, &argc, &argv, &error_g)) {
-                PRINT_STDERR("Failed parsing arguments: %s\n",
+	argctx = g_option_context_new(option_context);
+	g_option_context_add_main_entries(argctx, entries_g, NULL);
+	g_option_context_set_description(argctx, context_description);
+	if (!g_option_context_parse(argctx, &argc, &argv, &error_g)) {
+		PRINT_STDERR("Failed parsing arguments: %s\n",
 				error_g->message);
-                exit(EXIT_FAILURE);
-        }
+		exit(EXIT_FAILURE);
+	}
 
-        if (print_out != NULL) {
-                out_file = freopen(print_out, "we", stdout);
+	if (print_out != NULL) {
+		out_file = freopen(print_out, "we", stdout);
 		g_free(print_out);
 		print_out = NULL;
-                if (out_file == NULL) {
-                        perror("freopen");
-                        exit(EXIT_FAILURE);
-                }
-        }
+		if (out_file == NULL) {
+			perror("freopen");
+			exit(EXIT_FAILURE);
+		}
+	}
 
-        if (print_err != NULL) {
-                err_file = freopen(print_err, "we", stderr);
+	if (print_err != NULL) {
+		err_file = freopen(print_err, "we", stderr);
 		g_free(print_err);
 		print_err = NULL;
-                if (err_file == NULL) {
-                        perror("freopen");
-                        exit(EXIT_FAILURE);
-                }
-        }
+		if (err_file == NULL) {
+			perror("freopen");
+			exit(EXIT_FAILURE);
+		}
+	}
 	stdin = freopen("/dev/null", "re", stdin);
 
 	if (argc > 1 && strcmp(argv[1], "exit") == 0) {

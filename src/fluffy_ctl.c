@@ -310,8 +310,10 @@ main(int argc, char *argv[])
 		"--help-events will show the options to modify this behaviour";
 
 	/* For main group options */
+	/*
 	gchar *print_out = NULL;
 	gchar *print_err = NULL;
+	*/
 	gchar **watch_paths = NULL;
 	gchar **ignore_paths = NULL;
 	gchar *max_user_watches = NULL;
@@ -323,6 +325,7 @@ main(int argc, char *argv[])
 	gboolean get_watch_nos = FALSE;
 
 	GOptionEntry main_entries_g[]= {
+		/*
 		{ "outfile", 'O', 0, G_OPTION_ARG_FILENAME,
 			&print_out,
 			"File to print output [default:stdout]",
@@ -331,6 +334,7 @@ main(int argc, char *argv[])
 			&print_err,
 			"File to print errors [default:stderr]",
 			"./err.fluffy" },
+		*/
 		{ "watch", 'w', 0, G_OPTION_ARG_FILENAME_ARRAY,
 			&watch_paths,
 			"Paths to watch recursively. Repeat flag for " \
@@ -379,13 +383,13 @@ main(int argc, char *argv[])
 
 	out_file = stdout;
 	err_file = stderr;
-        GOptionContext *argctx;
-        GError *error_g = NULL;
+	GOptionContext *argctx;
+	GError *error_g = NULL;
 
-        argctx = g_option_context_new(option_context);
-        g_option_context_add_main_entries(argctx, main_entries_g, NULL);
-        g_option_context_set_description(argctx, context_description);
-        g_option_context_set_summary(argctx, context_summary);
+	argctx = g_option_context_new(option_context);
+	g_option_context_add_main_entries(argctx, main_entries_g, NULL);
+	g_option_context_set_description(argctx, context_description);
+	g_option_context_set_summary(argctx, context_summary);
 
 	/* For event groups options */
 	gboolean event_all = FALSE;
@@ -512,7 +516,7 @@ main(int argc, char *argv[])
 		{ NULL }
 	};
 
-        GOptionGroup *group_g;
+	GOptionGroup *group_g;
 	gchar event_group_name[] = "events";
 	gchar event_group_description[] = ""
 		"When an option or more from 'events' group is passed, only "
@@ -526,7 +530,7 @@ main(int argc, char *argv[])
 			NULL,
 			NULL);
 	g_option_group_add_entries(group_g, event_entries_g);
-        g_option_context_add_group(argctx, group_g);
+	g_option_context_add_group(argctx, group_g);
 
 	if (argc < 2) {
 		/*
@@ -538,34 +542,36 @@ main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-        if (!g_option_context_parse(argctx, &argc, &argv, &error_g)) {
-                PRINT_STDERR("Failed parsing arguments: %s\n",
+	if (!g_option_context_parse(argctx, &argc, &argv, &error_g)) {
+		PRINT_STDERR("Failed parsing arguments: %s\n",
 				error_g->message);
-                exit(EXIT_FAILURE);
-        }
+		exit(EXIT_FAILURE);
+	}
 
-        if (print_out != NULL) {
-                out_file = freopen(print_out, "we", stdout);
-                if (out_file == NULL) {
+	/*
+	if (print_out != NULL) {
+		out_file = freopen(print_out, "we", stdout);
+		if (out_file == NULL) {
 			g_free(print_out);
 			print_out = NULL;
-                        perror("freopen");
-                        exit(EXIT_FAILURE);
-                }
+			perror("freopen");
+			exit(EXIT_FAILURE);
+		}
 		g_free(print_out);
 		print_out = NULL;
-        }
-        if (print_err != NULL) {
-                err_file = freopen(print_err, "we", stderr);
-                if (err_file == NULL) {
+	}
+	if (print_err != NULL) {
+		err_file = freopen(print_err, "we", stderr);
+		if (err_file == NULL) {
 			g_free(print_err);
 			print_err = NULL;
-                        perror("freopen");
-                        exit(EXIT_FAILURE);
-                }
+			perror("freopen");
+			exit(EXIT_FAILURE);
+		}
 		g_free(print_err);
 		print_err = NULL;
-        }
+	}
+	*/
 	stdin = freopen("/dev/null", "re", stdin);
 
 	do {
