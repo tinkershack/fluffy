@@ -424,51 +424,51 @@ main(int argc, char *argv[])
 	int reterr = 0;
 	out_file = stdout;
 	err_file = stderr;
-        GOptionContext *argctx;
-        GError *error_g = NULL;
+	GOptionContext *argctx;
+	GError *error_g = NULL;
 
-        argctx = g_option_context_new(option_context);
-        g_option_context_add_main_entries(argctx, entries_g, NULL);
-        g_option_context_set_description(argctx, context_description);
-        if (!g_option_context_parse(argctx, &argc, &argv, &error_g)) {
-                PRINT_STDERR("Failed parsing arguments: %s\n",
+	argctx = g_option_context_new(option_context);
+	g_option_context_add_main_entries(argctx, entries_g, NULL);
+	g_option_context_set_description(argctx, context_description);
+	if (!g_option_context_parse(argctx, &argc, &argv, &error_g)) {
+		PRINT_STDERR("Failed parsing arguments: %s\n",
 				error_g->message);
-                exit(EXIT_FAILURE);
-        }
+		exit(EXIT_FAILURE);
+	}
 
-        if (print_out != NULL) {
-                out_file = freopen(print_out, "we", stdout);
-                if (out_file == NULL) {
-                        perror("freopen");
-                        exit(EXIT_FAILURE);
-                }
+	if (print_out != NULL) {
+		out_file = freopen(print_out, "we", stdout);
+		if (out_file == NULL) {
+			perror("freopen");
+			exit(EXIT_FAILURE);
+		}
 
 		event_log = realpath(print_out, NULL);
 		if (event_log == NULL) {
 			perror("realpath");
-                        exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
 		}
 
 		g_free(print_out);
 		print_out = NULL;
-        }
+	}
 
-        if (print_err != NULL) {
-                err_file = freopen(print_err, "we", stderr);
-                if (err_file == NULL) {
-                        perror("freopen");
-                        exit(EXIT_FAILURE);
-                }
+	if (print_err != NULL) {
+		err_file = freopen(print_err, "we", stderr);
+		if (err_file == NULL) {
+			perror("freopen");
+			exit(EXIT_FAILURE);
+		}
 
 		error_log = realpath(print_err, NULL);
 		if (error_log == NULL) {
 			perror("realpath");
-                        exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
 		}
 
 		g_free(print_err);
 		print_err = NULL;
-        }
+	}
 	stdin = freopen("/dev/null", "re", stdin);
 
 	if (argc > 1 && strcmp(argv[1], "exit") == 0) {
