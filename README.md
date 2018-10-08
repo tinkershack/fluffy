@@ -100,7 +100,7 @@ function calls available.
 
 __Primary functions__
 
-```
+```c
 int fluffy_init(int (*user_event_fn) (
     const struct fluffy_event_info *eventinfo,
     void *user_data), void *user_data);
@@ -118,7 +118,7 @@ int fluffy_destroy(int fluffy_handle);
 
 __Helper functions__
 
-```
+```c
 int fluffy_print_event(const struct fluffy_event_info *eventinfo,
     void *user_data);
 
@@ -135,7 +135,7 @@ int fluffy_set_max_user_watches(const char *max_size);
 
 #### [A simple example program using `libfluffy`](#contents)
 
-```
+```c
 /*
  * example.c
  */
@@ -243,7 +243,7 @@ folder](https://stackoverflow.com/questions/47225008/how-to-use-inotifywait-to-w
 
 ### [Don't mind getting your hands dirty?](#contents)
 
-```
+```bash
 # Fork and clone this repo
 # Ensure glib-2.0 has been installed
 # cd to fluffy dir
@@ -299,7 +299,7 @@ make example
 
 #### fluffy usage
 
-```
+```bash
 root@six-k:~# fluffy -h
 Usage:
   fluffy [OPTION...] [exit]
@@ -315,7 +315,7 @@ Application Options:
 
 #### fluffyctl usage
 
-```
+```bash
 root@six-k:~# fluffyctl --help-all
 Usage:
   fluffyctl [OPTION...] ["/path/to/hogwarts/kitchen"]
@@ -355,8 +355,6 @@ option, previously set events choice is discarded; overrides.
   --watch-empty                                   Watch whether all Fluffy watches are removed ['isdir' not raised]
 
 Application Options:
-  -O, --outfile=./out.fluffy                      File to print output [default:stdout]
-  -E, --errfile=./err.fluffy                      File to print errors [default:stderr]
   -w, --watch=/grimmauld/place/12                 Paths to watch recursively. Repeat flag for multiple paths.
   -W, --watch-glob                                Paths to watch recursively: supports wildcards. Any non-option argument passed will be considered as paths. [/hogwarts/*/towers]
   -i, --ignore=/knockturn/alley/borgin/brukes     Paths to ignore recursively. Repeat flag for multiple paths.
@@ -369,7 +367,7 @@ Application Options:
 
 #### Fluffy event log snippet
 
-```
+```bash
 MODIFY, /var/log/daemon.log
 MODIFY, /var/log/syslog
 MODIFY, /var/log/kern.log
@@ -396,14 +394,14 @@ IGNORED,ROOT_IGNORED,WATCH_EMPTY,       /tmp
 
 #### Perform actions on events from CLI
 
-**CAUTION** It's is recommended that you use `libfluffy` to perform 
-actions on events. 
+**CAUTION** It's recommended that you use `libfluffy` to perform 
+sophisticated actions on events rather than scripting with CLI usage. 
 
 Let's consider a trivial action: `ls -l` the path on a MODIFY event
 
 At terminal:1
 
-```
+```bash
 root@six-k:/home/lab/fluffy# fluffy | \
 while read events path; do \
     if echo $events | grep -qie "MODIFY"; then \
@@ -414,7 +412,7 @@ done
 
 At terminal:2
 
-```
+```bash
 root@six-k:/opt/test2# fluffyctl -w ./
 root@six-k:/opt/test2# touch f1
 root@six-k:/opt/test2# ls -l
@@ -427,7 +425,7 @@ root@six-k:/opt/test2# fluffy exit
 
 Output from terminal:1: [cont.]
 
-```
+```bash
 root@six-k:/home/lab/fluffy# fluffy | \
 > while read events path; do \
 >     if echo $events | grep -qie "MODIFY"; then \
@@ -449,16 +447,13 @@ There's still quite a few more to be done but these are the primary ones
    deliberately without any error string or value.
  - Valgrind
  - Test cases
- - Doxygen?
 
- - Fix makefiles, it's poorly formed.
  - Other helper functions
    - Destroy all contexts
-   - Get the total number of watches on a context
+   - Emit internal events(eg. watches set, file info) for analytics
    - Get the list of root watch paths
  - Option to terminate context thread when watch list becomes empty
  - Ability to modify callback function pointer
- - Replace glib hashtables with a native implementation?
 
 
 [fluffy.h]:     libfluffy/fluffy.h

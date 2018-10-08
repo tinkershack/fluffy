@@ -310,8 +310,10 @@ main(int argc, char *argv[])
 		"--help-events will show the options to modify this behaviour";
 
 	/* For main group options */
+	/*
 	gchar *print_out = NULL;
 	gchar *print_err = NULL;
+	*/
 	gchar **watch_paths = NULL;
 	gchar **ignore_paths = NULL;
 	gchar *max_user_watches = NULL;
@@ -323,6 +325,7 @@ main(int argc, char *argv[])
 	gboolean get_watch_nos = FALSE;
 
 	GOptionEntry main_entries_g[]= {
+		/*
 		{ "outfile", 'O', 0, G_OPTION_ARG_FILENAME,
 			&print_out,
 			"File to print output [default:stdout]",
@@ -331,6 +334,7 @@ main(int argc, char *argv[])
 			&print_err,
 			"File to print errors [default:stderr]",
 			"./err.fluffy" },
+		*/
 		{ "watch", 'w', 0, G_OPTION_ARG_FILENAME_ARRAY,
 			&watch_paths,
 			"Paths to watch recursively. Repeat flag for " \
@@ -544,6 +548,7 @@ main(int argc, char *argv[])
                 exit(EXIT_FAILURE);
         }
 
+	/*
         if (print_out != NULL) {
                 out_file = freopen(print_out, "we", stdout);
                 if (out_file == NULL) {
@@ -566,6 +571,7 @@ main(int argc, char *argv[])
 		g_free(print_err);
 		print_err = NULL;
         }
+	*/
 	stdin = freopen("/dev/null", "re", stdin);
 
 	do {

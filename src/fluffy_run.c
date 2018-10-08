@@ -24,6 +24,8 @@
 
 FILE *out_file = NULL;	/* File stream for PRINT_STDOUT macro */
 FILE *err_file = NULL;	/* File stream for PRINT_STDERR macro */
+char *event_log = NULL;	/* Don't watch the event log file */
+char *error_log = NULL;	/* Don't watch the error log file */
 int epollfd = -1;
 mqd_t mqd = -1;		/* Message queue descriptor */
 int flh = -1;		/* Fluffy handle */
@@ -63,6 +65,17 @@ print_events(const struct fluffy_event_info *eventinfo,
 	if (!(eventinfo->event_mask & print_events_mask)) {
 		return 0;
 	}
+
+	/* Don't log the event log file */
+	if (event_log && strcmp(event_log, eventinfo->path) == 0) {
+		return 0;
+	}
+
+	/* Don't log the error log file */
+	if (error_log && strcmp(error_log, eventinfo->path) == 0) {
+		return 0;
+	}
+
 
 	if (eventinfo->event_mask & FLUFFY_ACCESS &&
 	    print_events_mask & FLUFFY_ACCESS)
@@ -425,22 +438,36 @@ main(int argc, char *argv[])
 
         if (print_out != NULL) {
                 out_file = freopen(print_out, "we", stdout);
-		g_free(print_out);
-		print_out = NULL;
                 if (out_file == NULL) {
                         perror("freopen");
                         exit(EXIT_FAILURE);
                 }
+
+		event_log = realpath(print_out, NULL);
+		if (event_log == NULL) {
+			perror("realpath");
+                        exit(EXIT_FAILURE);
+		}
+
+		g_free(print_out);
+		print_out = NULL;
         }
 
         if (print_err != NULL) {
                 err_file = freopen(print_err, "we", stderr);
-		g_free(print_err);
-		print_err = NULL;
                 if (err_file == NULL) {
                         perror("freopen");
                         exit(EXIT_FAILURE);
                 }
+
+		error_log = realpath(print_err, NULL);
+		if (error_log == NULL) {
+			perror("realpath");
+                        exit(EXIT_FAILURE);
+		}
+
+		g_free(print_err);
+		print_err = NULL;
         }
 	stdin = freopen("/dev/null", "re", stdin);
 
@@ -491,6 +518,11 @@ main(int argc, char *argv[])
 		free(evlist);
 		evlist = NULL;
 	}
+
+	free(event_log);
+	event_log = NULL;
+	free(error_log);
+	error_log = NULL;
 
 	terminate_run();
 
