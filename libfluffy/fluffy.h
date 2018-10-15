@@ -33,6 +33,39 @@
 #define FLUFFY_ROOT_IGNORED	0x00010000	/* Root file was ignored */
 #define FLUFFY_WATCH_EMPTY	0x00020000	/* All watches removed */
 
+/* Error codes */
+#define FLUFFY_ERROR_INVALID_ARG		1
+#define FLUFFY_ERROR_OPEN_QUEUE_FAILED		2	/* errno is set */
+#define FLUFFY_ERROR_WRITE_QUEUE_FAILED		3	/* errno is set */
+#define FLUFFY_ERROR_CLOSE_QUEUE_FAILED		4	/* errno is set */
+#define FLUFFY_ERROR_NO_MEMORY			5
+#define FLUFFY_ERROR_MUTEX_LOCK_FAILED		6
+#define FLUFFY_ERROR_INOTIFY_ADD_WATCH		7	/* errno is set */
+#define FLUFFY_ERROR_REAL_PATH_RESOLVE		8	/* errno is set */
+#define FLUFFY_ERROR_NFTW_WALKING		9	/* errno is set */
+#define FLUFFY_ERROR_CLOSE_INOTIFY_FD		10	/* errno is set */
+#define FLUFFY_ERROR_INIT_INOTIFY_FD		11	/* errno is set */
+#define FLUFFY_ERROR_EPOLL_CTL			12	/* errno is set */
+#define FLUFFY_ERROR_TRACK_NOT_INIT		13
+#define FLUFFY_ERROR_EPOLL_CREATE		14	/* errno is set */
+#define FLUFFY_ERROR_G_HASHTABLE_LOOKUP		15	/* internal error? */
+#define FLUFFY_ERROR_RM_INOTIFY_WATCH		16	/* errno is set */
+#define FLUFFY_ERROR_READ_INOTIFY_FD		17	/* errno is set */
+#define FLUFFY_ERROR_TRACK_EMPTY		18
+#define FLUFFY_ERROR_MUTEX_UNLOCK_FAILED	19
+#define FLUFFY_ERROR_THREAD_CREATE		20	/* errno is set */
+#define FLUFFY_ERROR_THREAD_JOIN		21	/* According to OpenGroup, the only reason is that system detected a deadlock */
+#define FLUFFY_ERROR_THREAD_DETACH		22	/* According to OpenGroup, the only reason is that a invalid argument is provided */
+#define FLUFFY_ERROR_EPOLL_WAIT			13	/* errno is set */
+
+#define FLUFFY_ERROR_GENERIC			-1
+
+#define FLUFFY_ERROR_CTXINFOP		FLUFFY_ERROR_G_HASHTABLE_LOOKUP // Not sure if it is the correct error code (neold2022)
+#define FLUFFY_ERROR_G_HASH_TABLE	FLUFFY_ERROR_NO_MEMORY // Not sure if it is the correct error code (neold2022)
+#define FLUFFY_ERROR_G_TREE		FLUFFY_ERROR_NO_MEMORY // Not sure if it is the correct error code (neold2022)
+
+		
+
 
 struct fluffy_event_info {
 	/*
@@ -85,6 +118,7 @@ struct fluffy_event_info {
  * 	- int:	0 to continue with the next event processing,
  * 		any other integer(preferably -1) to destroy the context
  */
+ // TODO: fluffy_init actually returns flhandle (a positive integer) when successful (see the implementation). Edit the function description? (neold2022)
 extern int fluffy_init(int (*user_event_fn) (
     const struct fluffy_event_info *eventinfo,
     void *user_data), void *user_data);
